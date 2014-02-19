@@ -6,12 +6,14 @@ import argparse
 import sys
 import numpy as np
 import math
-try:
-    import emcee
-except ImportError:
-    raise ImportError('Install ``emcee`` python package to proceed')
+#try:
+#    import emcee
+#except ImportError:
+#    raise ImportError('Install ``emcee`` python package to proceed')
 try:
     import scipy as sp
+    from scipy.special import erf
+    from scipy.optimize import leastsq
 except ImportError:
     sp = None
 
@@ -74,8 +76,6 @@ class LnPost(object):
         return self.lnlike(p) + self.lnpr(p)
 
 
-# Use ``Model`` class subclasses for strategy pattern? Or 2 methods of
-# ``LnLike`` class? Better take models in separate class
 # TODO: Add t-distribution noise model
 # TODO: Account for outliers in data
 class LnLike(object):
@@ -104,26 +104,29 @@ class LnLike(object):
     """
     def __init__(self, x, y, sy=None, x_limits=None, y_limits=None, sy_limits=None):
         # If x is 2D - (u,v) then use np.at_least_2d?
-        self.x = np.array(x)
-        self.y = np.array(y)
+        self.x = np.asarray(x)
+        self.y = np.asarray(y)
         try:
-            self.sy = np.array(sy)
+            self.sy = np.asarray(sy)
         except ValueError:
             self.sy = sy
-        self.x_limits = x_limits
-        self.y_limits = y_limits
-        self.sy_limits = sy_limits
+        self.x_limits = np.asarray(x_limits)
+        self.y_limits = np.asarray(y_limits)
+        try:
+            self.sy_limits = np.asarray(sy_limits)
+        except ValueError:
+            self.sy_limits = sy_limits
 
         # Various assertions on data consistency
-        assert(self.x.dim in [1, 2])
+        assert(self.x.ndim in [1, 2])
         assert(len(self.x) == len(self.y))
         if self.sy is not None:
             assert(len(self.y) == len(self.sy))
 
         # Choose method for model calculation here
-        if self.x.dim == 1:
+        if self.x.ndim == 1:
             self._model = Model_1d
-        elif self.x.dim == 2:
+        elif self.x.ndim == 2:
             self._model = Model_2d
 
         self._lnprob = list()
@@ -134,10 +137,10 @@ class LnLike(object):
             # Then we must have at least x & y for upper limits
             assert(self.x_limits is not None and self.y_limits is not None)
             # Assert equal dimensionality for x of detections and limits
-            assert(np.shape(self.x)[1] == np.shape(self.x_limits)[1])
+            assert(self.x.ndim == self.x_limits.ndim)
 
             self._lnprob.append(LnProbUlimits(x_limits, y_limits, self._model,
-                                              sy=sy))
+                                              sy=sy_limits))
 
 # TODO: Should i try to use try/except?
     def __call__(self, p):
@@ -152,7 +155,7 @@ class Model(object):
         self.x = x
 
     def __call__(self, p):
-        pass
+        raise NotImplementedError
 
 
 class Model_1d(Model):
@@ -222,14 +225,14 @@ class LnProbUlimits(LnProb):
     Lnlikelihood for upper limits.
     """
     def __init__(self, x, y, model, sy=None):
-        super(LnProbDetections, self).__init__(x, y, model, sy=sy)
+        super(LnProbUlimits, self).__init__(x, y, model, sy=sy)
 
     def _lnprob1(self, p):
-        return (np.log(0.5 * (1. + sp.erf((self.y - self.model(p)) /
+        return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * self.sy))))).sum()
 
     def _lnprob2(self, p):
-        return (np.log(0.5 * (1. + sp.erf((self.y - self.model(p)) /
+        return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * p[-1]))))).sum()
 
 
@@ -237,7 +240,7 @@ class LnPrior(object):
     """
     Class that represents prior pdf for parameters.
     """
-     def __init__(self):
+    def __init__(self):
          pass
 
 
@@ -263,7 +266,7 @@ class LS_estimates(object):
        def residuals(p, x, y, sy):
            return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
 
-       result = sp.optimize.leastsq()
+       result = leastsq()
 
     def fit_2d(self):
         """
@@ -276,43 +279,59 @@ class LS_estimates(object):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser()
+    p = [2, 0.3]
+    x = np.array([0., 0.1, 0.2, 0.4])
+    model = Model_1d(x)
+    y = model([2., 0.3]) + np.random.normal(0, 0.2, size=4)
+    sy =  np.random.normal(0, 0.2, size=4)
+    #errorbar(x, y, sy, fmt='.k')
+    xl = np.array([0.35, 0.45])
+    yl = np.array([1., 0.5])
+    syl = np.random.normal(0, 0.2, size=2)
 
-    parser.add_argument('-a', action='store_true', default=False,
-    dest='use_archive_ftp', help='Use archive.asc.rssi.ru ftp-server for\
-    FITS-files')
+    lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
+    lnlike._lnprob[1].__call__(p)
+    lnlike(p)
 
-    parser.add_argument('-asc', action='store_const', dest='remote_dir',
-    const='/', help='Download asc-correlator FITS-files')
 
-    parser.add_argument('-difx', action='store_const', dest='remote_dir',
-    const='/quasars_difx/', help='Download difx-correlator FITS-files')
 
-    parser.add_argument('exp_name', type=str, help='Name of the experiment')
-    parser.add_argument('band', type=str, help='Frequency [c,k,l,p]')
-    parser.add_argument('refant', type=str, default='EFLSBERG', help='Ground antenna', nargs='?')
+   # parser = argparse.ArgumentParser()
 
-    args = parser.parse_args()
+   # parser.add_argument('-a', action='store_true', default=False,
+   # dest='use_archive_ftp', help='Use archive.asc.rssi.ru ftp-server for\
+   # FITS-files')
 
-    if not args.remote_dir:
-        sys.exit("Use -asc/-difx flags to select archive's fits-files")
+   # parser.add_argument('-asc', action='store_const', dest='remote_dir',
+   # const='/', help='Download asc-correlator FITS-files')
 
-    # Sampling posterior density of parameters
-    lnpost = LnPost(x, y, sy=sy, x_limits=x_limits, y_limits=y_limits,
-                    sy_limits=sy_limits, lnpr=lnpr, args=None,
-                    kwargs=None)
+   # parser.add_argument('-difx', action='store_const', dest='remote_dir',
+   # const='/quasars_difx/', help='Download difx-correlator FITS-files')
 
-    # Using affine-invariant MCMC
-    nwalkers = 250
-    ndim = ndim
-    # Find p0 approx. using leastsq
-    p0 = np.random.uniform(low=0.05, high=0.2, size=(nwalkers, ndim))
+   # parser.add_argument('exp_name', type=str, help='Name of the experiment')
+   # parser.add_argument('band', type=str, help='Frequency [c,k,l,p]')
+   # parser.add_argument('refant', type=str, default='EFLSBERG', help='Ground antenna', nargs='?')
 
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-    pos, prob, state = sampler.run_mcmc(p0, 250)
-    sampler.reset()
+   # args = parser.parse_args()
 
-    sampler.run_mcmc(pos, 500)
+   # if not args.remote_dir:
+   #     sys.exit("Use -asc/-difx flags to select archive's fits-files")
+
+   # # Sampling posterior density of parameters
+   # lnpost = LnPost(x, y, sy=sy, x_limits=x_limits, y_limits=y_limits,
+   #                 sy_limits=sy_limits, lnpr=lnpr, args=None,
+   #                 kwargs=None)
+
+   # # Using affine-invariant MCMC
+   # nwalkers = 250
+   # ndim = ndim
+   # # Find p0 approx. using leastsq
+   # p0 = np.random.uniform(low=0.05, high=0.2, size=(nwalkers, ndim))
+
+   # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+   # pos, prob, state = sampler.run_mcmc(p0, 250)
+   # sampler.reset()
+
+   # sampler.run_mcmc(pos, 500)
 
 
 
