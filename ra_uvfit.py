@@ -13,6 +13,11 @@ try:
 except ImportError:
     raise ImportError('Install ``emcee`` python package to proceed')
 try:
+    import triangle
+except ImportError:
+    raise ImportError('Install ``triangle`` python package to draw beautiful'
+                      ' plots')
+try:
     from scipy.special import erf
     from scipy.optimize import leastsq
     from scipy.stats import uniform
@@ -402,26 +407,35 @@ if __name__ == '__main__':
     # # Visualize with triangle.py
     # triangle.corner(sampler.flatchain[::10, :])
 
-    parser = argparse.ArgumentParser()
+    parser =\
+        argparse.ArgumentParser(description="Fit simple models in uv-plane",
+                                epilog="Help me to develop it here:"
+                                       " https://github.com/ipashchenko/uvmod")
 
     parser.add_argument('-leastsq', action='store_true', dest='use_leastsq',
                         default=False,
-                        help='Use scipy.optimize.leastsq for analysis of'
+                        help='use scipy.optimize.leastsq for analysis of'
                              ' detections.')
     parser.add_argument('-2d', action='store_true', dest='use_2d',
                         default=False, help='Use 2D-fitting?')
-    parser.add_argument('path_to_detections', type=str, help='Path to file with'
-                                                             ' detections data.')
-    parser.add_argument('path_to_ulimits', nargs='?', default=None, type=str,
-                        help='Path to file with upper limits data.')
-    parser.add_argument('max_amp', nargs='?', default=None, type=float,
-                        help='Maximum amplitude for uniform prior'
-                             ' distribution. If not given => use 10 x'
-                             ' max(data)')
-    parser.add_argument('max_std', nargs='?', default=None, type=float,
-                        help='Maximum uncertainty for uniform prior'
-                             ' distribution. If not given => use 10 x'
-                             ' std(data)')
+    parser.add_argument('path_to_detections', type=str, metavar='detections',
+                        help='path to file with detections data.')
+    parser.add_argument('path_to_ulimits', nargs='?', metavar='upper limits',
+                        default=None, type=str, help='path to file with upper'
+                                                     ' limits data.')
+    parser.add_argument('-max_amp', action='store', nargs='?', default=None,
+                        type=float, help='maximum amplitude for uniform prior'
+                                         ' distribution. If not given => use 10'
+                                         ' x max(data)')
+    parser.add_argument('-max_std', action='store', nargs='?', default=None,
+                        type=float, help='maximum uncertainty for uniform prior'
+                                         ' distribution. If not given => use'
+                                         ' std(data)')
+    parser.add_argument('-savefig', action='store', nargs='?',
+                        default='uvmod_figure.png', metavar='path to file',
+                        type=str, help='file to save corner plot of posterior'
+                                       ' PDF. If not given =>'
+                                       ' "uvmod_figure.py".')
 
     args = parser.parse_args()
 
@@ -459,7 +473,29 @@ if __name__ == '__main__':
 
     print (x, y, sy, xl, yl, syl)
 
+    # If no ranges for uniform priors are given => calculate them
+    max_amp = args.max_amp or 10. * np.max(y)
+    max_std = args.max_std or np.std(y)
 
+
+    lnprs = ((uniform.logpdf, [0, max_amp], dict(),),
+             (uniform.logpdf, [0, max_std], dict(),),)
+    lnpr = LnPrior(lnprs)
+    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
+                    lnpr=lnpr)
+
+    # Using affine-invariant MCMC
+    nwalkers = 250
+    ndim = 2
+    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+    pos, prob, state = sampler.run_mcmc(p0, 250)
+    sampler.reset()
+    sampler.run_mcmc(pos, 500)
+    # Visualize with triangle.py
+    figure = triangle.corner(sampler.flatchain[::10, :])
+    print ("Saving figure to " + args.savefig)
+    figure.savefig(args.savefig)
 
 
 
