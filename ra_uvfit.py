@@ -6,13 +6,16 @@ import argparse
 import sys
 import numpy as np
 import math
-#try:
-#    import emcee
-#except ImportError:
-#    raise ImportError('Install ``emcee`` python package to proceed')
+from pylab import (errorbar, plot)
+sys.path.append('/home/ilya/work/emcee')
+try:
+    import emcee
+except ImportError:
+    raise ImportError('Install ``emcee`` python package to proceed')
 try:
     from scipy.special import erf
     from scipy.optimize import leastsq
+    from scipy.stats import uniform
 except ImportError:
     sp = None
 
@@ -102,19 +105,24 @@ class LnLike(object):
         Std of upper limits visibility amplitude measurements.
 
     """
-    def __init__(self, x, y, sy=None, x_limits=None, y_limits=None, sy_limits=None):
+    def __init__(self, x, y, sy=None, x_limits=None, y_limits=None,
+                 sy_limits=None):
         # If x is 2D - (u,v) then use np.at_least_2d?
         self.x = np.asarray(x)
         self.y = np.asarray(y)
-        try:
+        if sy is not None:
             self.sy = np.asarray(sy)
-        except ValueError:
-            self.sy = sy
-        self.x_limits = np.asarray(x_limits)
-        self.y_limits = np.asarray(y_limits)
-        try:
+        else:
+            self.sy = None
+        if x_limits is not None:
+            self.x_limits = np.asarray(x_limits)
+            self.y_limits = np.asarray(y_limits)
+        else:
+            self.x_limits = x_limits
+            self.y_limits = y_limits
+        if sy_limits is not None:
             self.sy_limits = np.asarray(sy_limits)
-        except ValueError:
+        else:
             self.sy_limits = sy_limits
 
         # Various assertions on data consistency
@@ -133,7 +141,8 @@ class LnLike(object):
         self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy))
 
         # If we have any data on upper limits
-        if (self.x_limits is not None) or (self.y_limits is not None) or (self.sy_limits is not None):
+        if (self.x_limits is not None) or (self.y_limits is not None) or\
+                (self.sy_limits is not None):
             # Then we must have at least x & y for upper limits
             assert(self.x_limits is not None and self.y_limits is not None)
             # Assert equal dimensionality for x of detections and limits
@@ -212,12 +221,12 @@ class LnProbDetections(LnProb):
         super(LnProbDetections, self).__init__(x, y, model, sy=sy)
 
     def _lnprob1(self, p):
-        return (np.log(2. * math.pi * self.sy ** 2) -
-               (self.y - self.model(p)) / (2. * self.sy ** 2)).sum()
+        return (-0.5 * np.log(2. * math.pi * self.sy ** 2) -
+               (self.y - self.model(p)) ** 2. / (2. * self.sy ** 2)).sum()
 
     def _lnprob2(self, p):
-        return (np.log(2. * math.pi * p[-1] ** 2) -
-               (self.y - self.model(p)) / (2. * p[-1] ** 2)).sum()
+        return (-0.5 * np.log(2. * math.pi * p[-1] ** 2) -
+               (self.y - self.model(p)) ** 2. / (2. * p[-1] ** 2)).sum()
 
 
 class LnProbUlimits(LnProb):
@@ -329,17 +338,25 @@ class LS_estimates(object):
 
 if __name__ == '__main__':
 
+    # importing
+    from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
+    from scipy.stats import uniform
+    import triangle
+
     # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
     print("Generating 1-d data with amp=2, sigma=0.3")
     p = [2, 0.3]
-    x = np.array([0., 0.1, 0.2, 0.4])
+    x = np.array([0., 0.1, 0.2, 0.4, 0.6])
     model = Model_1d(x)
-    y = model([2., 0.3]) + np.random.normal(0, 0.2, size=4)
-    sy = np.random.normal(0, 0.2, size=4)
-    #errorbar(x, y, sy, fmt='.k')
-    xl = np.array([0.35, 0.45])
-    yl = np.array([1., 0.5])
-    syl = np.random.normal(0, 0.2, size=2)
+    y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
+    sy = np.random.normal(0.15, 0.025, size=5)
+    errorbar(x, y, sy, fmt='.k')
+    xl = np.array([0.5, 0.7])
+    yl = np.array([0.6, 0.2])
+    syl = np.random.normal(0.1, 0.03, size=2)
+    errorbar(xl, yl, syl, fmt='.r', lolims=True)
+    model_plot = Model_1d(np.arange(750) / 1000.)
+    plot(np.arange(750) / 1000., model_plot(p))
     print(x)
     print(y)
     print(sy)
@@ -347,6 +364,7 @@ if __name__ == '__main__':
     # Testing ``LnLike``
     print("Testing ``LnLike``")
     lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
+    lnlike._lnprob[0].__call__(p)
     lnlike._lnprob[1].__call__(p)
     lnlike(p)
 
@@ -356,42 +374,44 @@ if __name__ == '__main__':
     amp, sigma = lsq.fit_1d()
     print ("amp = " + str(amp), "sigma = " + str(sigma))
 
+    # Testing ``LnPost``
+    lnprs = ((uniform.logpdf, [0, 10], dict(),),
+             (uniform.logpdf, [0, 2], dict(),),)
+    lnpr = LnPrior(lnprs)
+    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
+                    lnpr=lnpr)
+    assert(lnpost._lnpr(p) == lnpr(p))
+    assert(lnpost._lnlike(p) == lnlike(p))
 
 
-   # parser = argparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
 
-   # parser.add_argument('-a', action='store_true', default=False,
-   # dest='use_archive_ftp', help='Use archive.asc.rssi.ru ftp-server for\
-   # FITS-files')
+    # parser.add_argument('-a', action='store_true', default=False,
+    # dest='use_archive_ftp', help='Use archive.asc.rssi.ru ftp-server for\
+    # FITS-files')
 
-   # parser.add_argument('-asc', action='store_const', dest='remote_dir',
-   # const='/', help='Download asc-correlator FITS-files')
+    # parser.add_argument('-asc', action='store_const', dest='remote_dir',
+    # const='/', help='Download asc-correlator FITS-files')
 
-   # parser.add_argument('-difx', action='store_const', dest='remote_dir',
-   # const='/quasars_difx/', help='Download difx-correlator FITS-files')
+    # parser.add_argument('-difx', action='store_const', dest='remote_dir',
+    # const='/quasars_difx/', help='Download difx-correlator FITS-files')
 
-   # parser.add_argument('exp_name', type=str, help='Name of the experiment')
-   # parser.add_argument('band', type=str, help='Frequency [c,k,l,p]')
-   # parser.add_argument('refant', type=str, default='EFLSBERG', help='Ground antenna', nargs='?')
+    # parser.add_argument('exp_name', type=str, help='Name of the experiment')
+    # parser.add_argument('band', type=str, help='Frequency [c,k,l,p]')
+    # parser.add_argument('refant', type=str, default='EFLSBERG', help='Ground antenna', nargs='?')
 
-   # args = parser.parse_args()
+    # args = parser.parse_args()
 
-   # if not args.remote_dir:
-   #     sys.exit("Use -asc/-difx flags to select archive's fits-files")
+    # if not args.remote_dir:
+    #     sys.exit("Use -asc/-difx flags to select archive's fits-files")
 
-   # # Sampling posterior density of parameters
-   # lnpost = LnPost(x, y, sy=sy, x_limits=x_limits, y_limits=y_limits,
-   #                 sy_limits=sy_limits, lnpr=lnpr, args=None,
-   #                 kwargs=None)
-
-   # # Using affine-invariant MCMC
-   # nwalkers = 250
-   # ndim = ndim
-   # # Find p0 approx. using leastsq
-   # p0 = np.random.uniform(low=0.05, high=0.2, size=(nwalkers, ndim))
-
-   # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-   # pos, prob, state = sampler.run_mcmc(p0, 250)
-   # sampler.reset()
-
-   # sampler.run_mcmc(pos, 500)
+    # Using affine-invariant MCMC
+    nwalkers = 250
+    ndim = 2
+    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+    pos, prob, state = sampler.run_mcmc(p0, 250)
+    sampler.reset()
+    sampler.run_mcmc(pos, 500)
+    # Visualize with triangle.py
+    triangle.corner(sampler.flatchain[::10, :])
