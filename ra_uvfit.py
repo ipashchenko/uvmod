@@ -11,7 +11,6 @@ import math
 #except ImportError:
 #    raise ImportError('Install ``emcee`` python package to proceed')
 try:
-    import scipy as sp
     from scipy.special import erf
     from scipy.optimize import leastsq
 except ImportError:
@@ -42,7 +41,8 @@ class LnPost(object):
         Std of upper limits visibility amplitude measurements.
 
     :param lnpr:
-        Callable prior distribution.
+        Instance of ``LnPrior`` class. Actually any callable that returns ln of
+        the prior pdf for parameter vector.
 
     :param args (optional):
         Positional arguments for prior density callable.
@@ -239,9 +239,55 @@ class LnProbUlimits(LnProb):
 class LnPrior(object):
     """
     Class that represents prior pdf for parameters.
+
+    :param lnprs:
+        Tuple of tuples (callable, args, kwargs,) where args & kwargs -
+        additional arguments to callable. Each callable is called callable(p,
+        *args, **kwargs).
+
+        Example:
+            ((scipy.stats.norm.logpdf, [mu, s], dict(),),
+            (scipy.stats.beta.logpdf, [alpha, beta], dict(),),
+            (scipy.stats.uniform.logpdf, [a, b - a], dict(),),
+            (scipy.stats.lognorm.logpdf, [i don't know:)], dict,),)
+
+        First tuple will result in calling: scipy.stats.norm.logpdf(x, mu, s)
+
     """
-    def __init__(self):
-         pass
+    def __init__(self, lnprs):
+        self.lnprs = [_function_wrapper(func, args, kwargs) for func, args,
+                      kwargs in lnprs]
+
+    def __call__(self, p):
+        """
+        Returns ln of prior pdf for given parameter vector.
+        """
+        return sum([self.lnprs[i](p_) for i, p_ in enumerate(p)])
+
+
+class _function_wrapper(object):
+    """
+    This is a hack to make the likelihood function pickleable when ``args``
+    are also included.
+
+    """
+    def __init__(self, f, args, kwargs):
+        self.f = f
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, x):
+        try:
+            return self.f(x, *self.args, **self.kwargs)
+        except:
+            import traceback
+            print("uvmod: Exception while calling your prior pdf:")
+            print("  params:", x)
+            print("  args:", self.args)
+            print("  kwargs:", self.kwargs)
+            print("  exception:")
+            traceback.print_exc()
+            raise
 
 
 # TODO: implement sy being initial guess for uncertainty
@@ -250,23 +296,27 @@ class LS_estimates(object):
     Class that implements estimates of parameters via least squares method.
     """
     def __init__(self, x, y, sy=None):
-       if sp is None:
-           raise ImportError('scipy')
-       self.x = x
-       self.y = y
-       self.sy = sy
+        # if sp is None:
+        #     raise ImportError('scipy')
+        self.x = x
+        self.y = y
+        self.sy = sy
 
     def fit_1d(self):
-       """
-       LS for 1D data.
+        """
+        LS for 1D data.
 
-       Fitting model log(y) = a * x ** 2 + b
-       """
+        Fitting model log(y) = a * x ** 2 + b
+        """
 
-       def residuals(p, x, y, sy):
-           return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
+        def residuals(p, x, y, sy):
+            return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
 
-       result = leastsq()
+        p = leastsq(residuals, [0., 0.], args=(self.x, self.y, self.sy,))[0]
+        sigma = math.sqrt(-1. / (2. * p[0]))
+        amp = math.exp(p[1])
+
+        return amp, sigma
 
     def fit_2d(self):
         """
@@ -279,19 +329,32 @@ class LS_estimates(object):
 
 if __name__ == '__main__':
 
+    # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
+    print("Generating 1-d data with amp=2, sigma=0.3")
     p = [2, 0.3]
     x = np.array([0., 0.1, 0.2, 0.4])
     model = Model_1d(x)
     y = model([2., 0.3]) + np.random.normal(0, 0.2, size=4)
-    sy =  np.random.normal(0, 0.2, size=4)
+    sy = np.random.normal(0, 0.2, size=4)
     #errorbar(x, y, sy, fmt='.k')
     xl = np.array([0.35, 0.45])
     yl = np.array([1., 0.5])
     syl = np.random.normal(0, 0.2, size=2)
+    print(x)
+    print(y)
+    print(sy)
 
+    # Testing ``LnLike``
+    print("Testing ``LnLike``")
     lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
     lnlike._lnprob[1].__call__(p)
     lnlike(p)
+
+    # Testing ``LS_estimates``
+    print("Testing ``LS_estimates``")
+    lsq = LS_estimates(x, y, sy=sy)
+    amp, sigma = lsq.fit_1d()
+    print ("amp = " + str(amp), "sigma = " + str(sigma))
 
 
 
@@ -332,6 +395,3 @@ if __name__ == '__main__':
    # sampler.reset()
 
    # sampler.run_mcmc(pos, 500)
-
-
-
