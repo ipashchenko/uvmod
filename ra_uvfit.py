@@ -346,80 +346,124 @@ class LS_estimates(object):
 
 if __name__ == '__main__':
 
-    # importing
-    from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
-    from scipy.stats import uniform
-    import triangle
+    # # importing
+    # from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
+    # from scipy.stats import uniform
+    # import triangle
 
-    # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
-    print("Generating 1-d data with amp=2, sigma=0.3")
-    p = [2, 0.3]
-    x = np.array([0., 0.1, 0.2, 0.4, 0.6])
-    model = Model_1d(x)
-    y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
-    sy = np.random.normal(0.15, 0.025, size=5)
-    errorbar(x, y, sy, fmt='.k')
-    xl = np.array([0.5, 0.7])
-    yl = np.array([0.6, 0.2])
-    syl = np.random.normal(0.1, 0.03, size=2)
-    errorbar(xl, yl, syl, fmt='.r', lolims=True)
-    model_plot = Model_1d(np.arange(750) / 1000.)
-    plot(np.arange(750) / 1000., model_plot(p))
-    print(x)
-    print(y)
-    print(sy)
+    # # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
+    # print("Generating 1-d data with amp=2, sigma=0.3")
+    # p = [2, 0.3]
+    # x = np.array([0., 0.1, 0.2, 0.4, 0.6])
+    # model = Model_1d(x)
+    # y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
+    # sy = np.random.normal(0.15, 0.025, size=5)
+    # errorbar(x, y, sy, fmt='.k')
+    # xl = np.array([0.5, 0.7])
+    # yl = np.array([0.6, 0.2])
+    # syl = np.random.normal(0.1, 0.03, size=2)
+    # errorbar(xl, yl, syl, fmt='.r', lolims=True)
+    # model_plot = Model_1d(np.arange(750) / 1000.)
+    # plot(np.arange(750) / 1000., model_plot(p))
+    # print(x)
+    # print(y)
+    # print(sy)
 
-    # Testing ``LnLike``
-    print("Testing ``LnLike``")
-    lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
-    lnlike._lnprob[0].__call__(p)
-    lnlike._lnprob[1].__call__(p)
-    lnlike(p)
+    # # Testing ``LnLike``
+    # print("Testing ``LnLike``")
+    # lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
+    # lnlike._lnprob[0].__call__(p)
+    # lnlike._lnprob[1].__call__(p)
+    # lnlike(p)
 
-    # Testing ``LS_estimates``
-    print("Testing ``LS_estimates``")
-    lsq = LS_estimates(x, y, sy=sy)
-    amp, sigma = lsq.fit_1d()
-    print ("amp = " + str(amp), "sigma = " + str(sigma))
+    # # Testing ``LS_estimates``
+    # print("Testing ``LS_estimates``")
+    # lsq = LS_estimates(x, y, sy=sy)
+    # amp, sigma = lsq.fit_1d()
+    # print ("amp = " + str(amp), "sigma = " + str(sigma))
 
-    # Testing ``LnPost``
-    lnprs = ((uniform.logpdf, [0, 10], dict(),),
-             (uniform.logpdf, [0, 2], dict(),),)
-    lnpr = LnPrior(lnprs)
-    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
-                    lnpr=lnpr)
-    assert(lnpost._lnpr(p) == lnpr(p))
-    assert(lnpost._lnlike(p) == lnlike(p))
+    # # Testing ``LnPost``
+    # lnprs = ((uniform.logpdf, [0, 10], dict(),),
+    #          (uniform.logpdf, [0, 2], dict(),),)
+    # lnpr = LnPrior(lnprs)
+    # lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
+    #                 lnpr=lnpr)
+    # assert(lnpost._lnpr(p) == lnpr(p))
+    # assert(lnpost._lnlike(p) == lnlike(p))
 
+    # # Using affine-invariant MCMC
+    # nwalkers = 250
+    # ndim = 2
+    # p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+    # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+    # pos, prob, state = sampler.run_mcmc(p0, 250)
+    # sampler.reset()
+    # sampler.run_mcmc(pos, 500)
+    # # Visualize with triangle.py
+    # triangle.corner(sampler.flatchain[::10, :])
 
-    # parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
 
-    # parser.add_argument('-a', action='store_true', default=False,
-    # dest='use_archive_ftp', help='Use archive.asc.rssi.ru ftp-server for\
-    # FITS-files')
+    parser.add_argument('-leastsq', action='store_true', dest='use_leastsq',
+                        default=False,
+                        help='Use scipy.optimize.leastsq for analysis of'
+                             ' detections.')
+    parser.add_argument('-2d', action='store_true', dest='use_2d',
+                        default=False, help='Use 2D-fitting?')
+    parser.add_argument('path_to_detections', type=str, help='Path to file with'
+                                                             ' detections data.')
+    parser.add_argument('path_to_ulimits', nargs='?', default=None, type=str,
+                        help='Path to file with upper limits data.')
+    parser.add_argument('max_amp', nargs='?', default=None, type=float,
+                        help='Maximum amplitude for uniform prior'
+                             ' distribution. If not given => use 10 x'
+                             ' max(data)')
+    parser.add_argument('max_std', nargs='?', default=None, type=float,
+                        help='Maximum uncertainty for uniform prior'
+                             ' distribution. If not given => use 10 x'
+                             ' std(data)')
 
-    # parser.add_argument('-asc', action='store_const', dest='remote_dir',
-    # const='/', help='Download asc-correlator FITS-files')
-
-    # parser.add_argument('-difx', action='store_const', dest='remote_dir',
-    # const='/quasars_difx/', help='Download difx-correlator FITS-files')
-
-    # parser.add_argument('exp_name', type=str, help='Name of the experiment')
-    # parser.add_argument('band', type=str, help='Frequency [c,k,l,p]')
-    # parser.add_argument('refant', type=str, default='EFLSBERG', help='Ground antenna', nargs='?')
-
-    # args = parser.parse_args()
+    args = parser.parse_args()
 
     # if not args.remote_dir:
     #     sys.exit("Use -asc/-difx flags to select archive's fits-files")
 
-    # Using affine-invariant MCMC
-    nwalkers = 250
-    ndim = 2
-    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-    pos, prob, state = sampler.run_mcmc(p0, 250)
-    sampler.reset()
-    sampler.run_mcmc(pos, 500)
-    # Visualize with triangle.py
-    triangle.corner(sampler.flatchain[::10, :])
+    print(parser.parse_args())
+
+    # TODO: refactor to function func(fname, tuple_of_dim, optional_tuple)
+    # Pre-initialize in case of no uncertainties supplied
+    xl, yl, sy, syl = [None] * 4
+    if not args.use_2d:
+        try:
+            x, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
+        except ValueError:
+            x, y = np.loadtxt(args.path_to_detections, unpack=True)
+        if args.path_to_ulimits:
+            try:
+                xl, yl, syl = np.loadtxt(args.path_to_ulimits, unpack=True)
+            except ValueError:
+                xl, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
+    else:
+        try:
+            x1, x2, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
+        except ValueError:
+            x1, x2, y = np.loadtxt(args.path_to_detections, unpack=True)
+        x = np.column_stack((x1, x2,))
+        if args.path_to_ulimits:
+            try:
+                xl1, xl2, yl, syl = np.loadtxt(args.path_to_ulimits,
+                                               unpack=True)
+            except ValueError:
+                xl1, xl2, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
+            xl = np.column_stack((xl1, xl2,))
+
+    print (x, y, sy, xl, yl, syl)
+
+
+
+
+
+
+
+
+
