@@ -311,17 +311,25 @@ class LS_estimates(object):
         self.y = y
         self.sy = sy
 
-    def fit_1d(self):
+    def fit_1d(self, p0=None):
         """
         LS for 1D data.
 
         Fitting model log(y) = a * x ** 2 + b
+
+        :param p0 (optional):
+
+            The starting estimate for the minimization. If ``None`` is given
+            then use [0., 0.]. (default: ``None``)
         """
+
+        if p0 is None:
+            p0 = [0., 0.]
 
         def residuals(p, x, y, sy):
             return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
 
-        p = leastsq(residuals, [0., 0.], args=(self.x, self.y, self.sy,))[0]
+        p = leastsq(residuals, p0, args=(self.x, self.y, self.sy,))[0]
         sigma = math.sqrt(-1. / (2. * p[0]))
         amp = math.exp(p[1])
 
