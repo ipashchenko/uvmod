@@ -334,11 +334,29 @@ class LS_estimates(object):
         def residuals(p, x, y, sy):
             return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
 
-        p = leastsq(residuals, p0, args=(self.x, self.y, self.sy,))[0]
+        fit = leastsq(residuals, p0, args=(self.x, self.y, self.sy,),
+                    full_output=True)
+        (p, pcov, infodict, errmsg, ier) = fit
+
+        if ier not in [1, 2, 3, 4]:
+            msg = "Optimal parameters not found: " + errmsg
+            raise RuntimeError(msg)
+
+        if (len(y) > len(p0)) and pcov is not None:
+            # Residual variance
+            s_sq = (residuals(p, x, y, sy)**2).sum()/(len(y)-len(p0))
+            pcov *= s_sq
+        else:
+            pcov = np.inf
+
+        print(p, pcov)
         sigma = math.sqrt(-1. / (2. * p[0]))
         amp = math.exp(p[1])
 
-        return amp, sigma
+        std_amp = amp * math.sqrt(pcov[1, 1])
+        std_sigma = math.sqrt(-2. * p[0] * pcov[0, 0])
+
+        return amp, sigma, std_amp, std_sigma
 
     def fit_2d(self):
         """
