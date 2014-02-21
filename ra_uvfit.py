@@ -442,6 +442,9 @@ if __name__ == '__main__':
                                                        ' for the minimization'
                                                        ' or center of initial'
                                                        ' ball for MCMC')
+    parser.add_argument('-std0', action='store', dest='std0', nargs='+',
+                        default=None, type=float, help='- stds of initial ball'
+                                                       ' for MCMC')
     parser.add_argument('-2d', action='store_true', dest='use_2d',
                         default=False, help='- use 2D-fitting?')
     parser.add_argument('path_to_detections', type=str, metavar='detections',
@@ -449,14 +452,9 @@ if __name__ == '__main__':
     parser.add_argument('path_to_ulimits', nargs='?', metavar='upper limits',
                         default=None, type=str, help=' - path to file with'
                                                      ' upper limits data')
-    parser.add_argument('-max_amp', action='store', nargs='?', default=None,
-                        type=float, help='- maximum amplitude for uniform prior'
-                                         ' distribution. If not given => use 10'
-                                         ' x max(data)')
-    parser.add_argument('-max_std', action='store', nargs='?', default=None,
-                        type=float, help='- maximum uncertainty for uniform'
-                                         ' prior distribution. If not given =>'
-                                         ' use std(data)')
+    parser.add_argument('-max_p', action='store', nargs='+', default=None,
+                        type=float, help='- maximum values of uniform prior'
+                                         ' distribution for parameters')
     parser.add_argument('-savefig', action='store', nargs='?',
                         default=None, metavar='path to file',
                         type=str, help='- file to save plots of posterior'
@@ -474,6 +472,24 @@ if __name__ == '__main__':
     if args.use_leastsq and (not args.p0):
         sys.exit("Use -p0 flag to specify the list of starting values for"
                  " minimization!")
+
+    if (not args.use_leastsq) and (not args.max_p):
+        sys.exit("Use -max_p flag to specify the list of maximum values of"
+                 " parameters in uniform prior distributions")
+
+    if (not args.use_leastsq) and args.p0 and (not args.std0):
+        sys.exit("Use -std0 flag to specify value of std for initial parametes"
+                 " ball")
+
+    if (not args.use_leastsq) and args.std0 and (not args.p0):
+        sys.exit("Use -p0 flag to specify the center of ball for initial"
+                 " parameters values")
+
+    if (not args.use_leastsq) and (not args.p0) and (not args.std0):
+        raise Warning("Use -p0 flag to specify the center of ball for initial"
+                      " parameters values and -std0 flag to specify value of"
+                      " std for that ball")
+
 
     print(parser.parse_args())
 
@@ -526,12 +542,8 @@ if __name__ == '__main__':
 
     # If not => use MCMC
     else:
-        # If no ranges for uniform priors are given => calculate them
-        max_amp = args.max_amp or 10. * np.max(y)
-        max_std = args.max_std or np.std(y)
-
-        lnprs = ((uniform.logpdf, [0, max_amp], dict(),),
-                 (uniform.logpdf, [0, max_std], dict(),),)
+        lnprs = ((uniform.logpdf, [0, args.max_p[0]], dict(),),
+                 (uniform.logpdf, [0, args.max_p[1]], dict(),),)
         lnpr = LnPrior(lnprs)
         lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
                         lnpr=lnpr)
@@ -539,11 +551,21 @@ if __name__ == '__main__':
         # Using affine-invariant MCMC
         nwalkers = 250
         ndim = 2
-        p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+        if not args.p0:
+            p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+           # p0 = np.dstack(tuple([np.random.uniform(low=0., high=args.max_p[i],
+           #                                         size=nwalkers) for i in
+           #                       range(ndim)]))[0, ...]
+        else:
+            p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
+        print(p0, np.shape(p0))
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
         pos, prob, state = sampler.run_mcmc(p0, 250)
         sampler.reset()
         sampler.run_mcmc(pos, 500)
+
+        # TODO: print some info
+
         # Visualize with triangle.py
         if args.savefig:
             # If ``triangle.py`` is install use it for corner plot of posterior
