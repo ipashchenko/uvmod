@@ -1,0 +1,115 @@
+#!/usr/bin python
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+from unittest import (TestCase, skip, skipIf)
+from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior, LnPost,
+                      hdi_of_mcmc)
+try:
+    from scipy.stats import uniform
+    is_scipy = True
+except ImportError:
+    is_scipy = False
+import sys
+sys.path.append('/home/ilya/work/emcee')
+try:
+    import emcee
+    is_emcee = True
+except ImportError:
+    is_emcee = False
+import numpy as np
+
+
+# TODO: fix random state to guarantee passing
+class Test_1D(TestCase):
+    def setUp(self):
+        self.p = [2, 0.3]
+        self.x = np.array([0., 0.1, 0.2, 0.4, 0.6])
+        self.model_1d = Model_1d(self.x)
+        self.y = self.model_1d(self.p) + np.random.normal(0, 0.1, size=5)
+        self.sy = np.random.normal(0.15, 0.025, size=5)
+        self.xl = np.array([0.5, 0.7])
+        self.yl = np.array([0.6, 0.2])
+        self.syl = np.random.normal(0.1, 0.03, size=2)
+        self.p1 = np.asarray(self.p) + np.array([1., 0.])
+        self.p2 = np.asarray(self.p) + np.array([-1., 0.])
+        self.p3 = np.asarray(self.p) + np.array([0., 0.2])
+        self.p4 = np.asarray(self.p) + np.array([0., -0.2])
+        self.p0_range = [0., 10.]
+        self.p1_range = [0., 2.]
+        print(is_scipy)
+        print(is_emcee)
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnLike(self):
+        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
+                        y_limits=self.yl, sy_limits=self.syl)
+        lnlik0 = lnlike._lnprob[0].__call__(self.p)
+        lnlik1 = lnlike._lnprob[1].__call__(self.p)
+        self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
+        self.assertGreater(lnlike(self.p), lnlike(self.p1))
+        self.assertGreater(lnlike(self.p), lnlike(self.p2))
+        self.assertGreater(lnlike(self.p), lnlike(self.p3))
+        self.assertGreater(lnlike(self.p), lnlike(self.p4))
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LS_estimates(self):
+        lsq = LS_estimates(self.x, self.y, sy=self.sy)
+        p, pcov = lsq.fit_1d([1., 1.])
+        delta0 = 3. * np.sqrt(pcov[0, 0])
+        delta1 = 3. * np.sqrt(pcov[1, 1])
+        self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
+        self.assertAlmostEqual(self.p[1], p[1], delta=delta1)
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnPrior(self):
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        self.assertTrue(np.isinf(lnpr([-1., 1.])))
+        self.assertTrue(np.isinf(lnpr([1., -1.])))
+        self.assertTrue(np.isinf(lnpr([15., 1.])))
+        self.assertTrue(np.isinf(lnpr([1., 5.])))
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnPost(self):
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
+                        y_limits=self.yl, sy_limits=self.syl)
+        lnpost = LnPost(self.x, self.y, sy=self.sy, x_limits=self.xl,
+                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        self.assertEqual(lnpost._lnpr(self.p), lnpr(self.p))
+        self.assertEqual(lnpost._lnlike(self.p), lnlike(self.p))
+        self.assertGreater(lnpost(self.p), lnpost(self.p1))
+        self.assertGreater(lnpost(self.p), lnpost(self.p2))
+        self.assertGreater(lnpost(self.p), lnpost(self.p3))
+        self.assertGreater(lnpost(self.p), lnpost(self.p4))
+
+    @skipIf((not is_emcee) or (not is_scipy), "``emcee`` and/or ``scipy``  not"
+                                              " installed")
+    def test_MCMC(self):
+        nwalkers = 250
+        ndim = 2
+        p0 = np.random.uniform(low=self.p1_range[0], high=self.p1_range[1],
+                               size=(nwalkers, ndim))
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
+                        y_limits=self.yl, sy_limits=self.syl)
+        lnpost = LnPost(self.x, self.y, sy=self.sy, x_limits=self.xl,
+                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+        pos, prob, state = sampler.run_mcmc(p0, 250)
+        sampler.reset()
+        sampler.run_mcmc(pos, 500)
+
+        sample_vec0 = sampler.flatchain[::10, 0]
+        sample_vec1 = sampler.flatchain[::10, 1]
+        p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
+        p1_hdi_min, p1_hdi_max = hdi_of_mcmc(sample_vec1)
+
+        self.assertTrue((p0_hdi_min < self.p[0] < p0_hdi_max))
+        self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
