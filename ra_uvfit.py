@@ -366,7 +366,6 @@ class LS_estimates(object):
         if not is_scipy:
             raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
                               + str(self.__class__))
-
         if p0 is None:
             raise Exception("Define starting estimate for minimization!")
 
@@ -393,8 +392,6 @@ class LS_estimates(object):
 
         if p[1] < 0:
             p[1] *= -1.
-
-        print(p, pcov)
 
         return p, pcov
 
@@ -459,7 +456,9 @@ if __name__ == '__main__':
                         default=None, metavar='path to file',
                         type=str, help='- file to save plots of posterior'
                                        ' PDF (if ``triangle.py`` is installed)'
-                                       ' or histograms.')
+                                       ' or histograms (coming soon). If'
+                                       ' -leastsq flag is set then plot data'
+                                       ' and best model')
     parser.add_argument('-savefile', action='store', nargs='?', default=None,
                         metavar='path to file', type=str, help='- file to save'
                                                                ' results')
@@ -472,6 +471,9 @@ if __name__ == '__main__':
     if args.use_leastsq and (not args.p0):
         sys.exit("Use -p0 flag to specify the list of starting values for"
                  " minimization!")
+
+    if args.use_leastsq and args.std0:
+        print("Specified flag -std0 won't be used in routine!")
 
     if (not args.use_leastsq) and (not args.max_p):
         sys.exit("Use -max_p flag to specify the list of maximum values of"
@@ -486,10 +488,9 @@ if __name__ == '__main__':
                  " parameters values")
 
     if (not args.use_leastsq) and (not args.p0) and (not args.std0):
-        raise Warning("Use -p0 flag to specify the center of ball for initial"
-                      " parameters values and -std0 flag to specify value of"
-                      " std for that ball")
-
+        print("Use -p0 flag to specify the center of ball for initial"
+              " parameters values!")
+        print("Use -std0 flag to specify value of std for that ball!")
 
     print(parser.parse_args())
 
@@ -553,9 +554,6 @@ if __name__ == '__main__':
         ndim = 2
         if not args.p0:
             p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
-           # p0 = np.dstack(tuple([np.random.uniform(low=0., high=args.max_p[i],
-           #                                         size=nwalkers) for i in
-           #                       range(ndim)]))[0, ...]
         else:
             p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
         print(p0, np.shape(p0))
@@ -579,6 +577,7 @@ if __name__ == '__main__':
                 raise NotImplementedError("Coming soon!")
 
         if args.savefile:
+            # TODO: put this to method(sampler, ndim)
             sample_vec0 = sampler.flatchain[::10, 0]
             sample_vec1 = sampler.flatchain[::10, 1]
             p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
@@ -588,4 +587,3 @@ if __name__ == '__main__':
             p0 = np.array([p0_hdi_min, p0_mean, p0_hdi_max])
             p1 = np.array([p1_hdi_min, p1_mean, p1_hdi_max])
             np.savetxt(args.savefile, np.vstack((p0, p1)))
-
