@@ -17,13 +17,14 @@ try:
     import emcee
     is_emcee = True
 except ImportError:
-    #raise ImportError('Install ``emcee`` python package to proceed')
+    raise ImportWarning('Install ``emcee`` python package to use MCMC.')
     is_emcee = False
 try:
     import triangle
+    is_triangle = True
 except ImportError:
-    # raise ImportError('Install ``triangle`` python package to draw beautiful'
-    #                   ' plots')
+    raise ImportWarning('Install ``triangle`` python package to draw beautiful'
+                        ' corner plots of posterior PDF.')
     is_triangle = False
 try:
     from scipy.special import erf
@@ -31,6 +32,8 @@ try:
     from scipy.stats import uniform
     is_scipy = True
 except ImportError:
+    raise ImportWarning('Install ``scipy`` python package to use least squares'
+                        ' estimates.')
     is_scipy = False
 
 
@@ -249,6 +252,8 @@ class LnProbUlimits(LnProb):
     """
     def __init__(self, x, y, model, sy=None):
         super(LnProbUlimits, self).__init__(x, y, model, sy=sy)
+        if not is_scipy:
+            raise ImportError("Install scipy to use " + str(self.__class__))
 
     def _lnprob1(self, p):
         return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
@@ -358,8 +363,8 @@ class LS_estimates(object):
         """
 
         if not is_scipy:
-            raise ImportError('Install ``scipy`` to use'
-                              ' ``LS_estimates.fit_1d`` method.')
+            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
+                              + str(self.__class__))
 
         if p0 is None:
             raise Exception("Define starting estimate for minimization!")
@@ -384,6 +389,9 @@ class LS_estimates(object):
             pcov *= s_sq
         else:
             pcov = np.inf
+
+        if p[1] < 0:
+            p[1] *= -1.
 
         print(p, pcov)
 
@@ -418,64 +426,6 @@ def hdi_of_mcmc(sample_vec, cred_mass=0.95):
 
 
 if __name__ == '__main__':
-
-    # importing
-    from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
-    from scipy.stats import uniform
-    import triangle
-    sys.path.append('/home/ilya/work/emcee')
-    import emcee
-
-    # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
-    print("Generating 1-d data with amp=2, sigma=0.3")
-    p = [2, 0.3]
-    x = np.array([0., 0.1, 0.2, 0.4, 0.6])
-    model = Model_1d(x)
-    y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
-    sy = np.random.normal(0.15, 0.025, size=5)
-    errorbar(x, y, sy, fmt='.k')
-    xl = np.array([0.5, 0.7])
-    yl = np.array([0.6, 0.2])
-    syl = np.random.normal(0.1, 0.03, size=2)
-    errorbar(xl, yl, syl, fmt='.r', lolims=True)
-    model_plot = Model_1d(np.arange(750) / 1000.)
-    plot(np.arange(750) / 1000., model_plot(p))
-    print(x)
-    print(y)
-    print(sy)
-
-    # Testing ``LnLike``
-    print("Testing ``LnLike``")
-    lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
-    lnlike._lnprob[0].__call__(p)
-    lnlike._lnprob[1].__call__(p)
-    lnlike(p)
-
-    # Testing ``LS_estimates``
-    print("Testing ``LS_estimates``")
-    lsq = LS_estimates(x, y, sy=sy)
-    p, pcov = lsq.fit_1d([1., 1.])
-    print (p, pcov)
-
-    # Testing ``LnPost``
-    lnprs = ((uniform.logpdf, [0, 10], dict(),),
-             (uniform.logpdf, [0, 2], dict(),),)
-    lnpr = LnPrior(lnprs)
-    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
-                    lnpr=lnpr)
-    assert(lnpost._lnpr(p) == lnpr(p))
-    assert(lnpost._lnlike(p) == lnlike(p))
-
-    # Using affine-invariant MCMC
-    nwalkers = 250
-    ndim = 2
-    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-    pos, prob, state = sampler.run_mcmc(p0, 250)
-    sampler.reset()
-    sampler.run_mcmc(pos, 500)
-    # Visualize with triangle.py
-    triangle.corner(sampler.flatchain[::10, :])
 
     parser =\
         argparse.ArgumentParser(description="Fit simple models in uv-plane",
