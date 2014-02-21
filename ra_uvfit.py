@@ -577,13 +577,11 @@ if __name__ == '__main__':
                 raise NotImplementedError("Coming soon!")
 
         if args.savefile:
-            # TODO: put this to method(sampler, ndim)
-            sample_vec0 = sampler.flatchain[::10, 0]
-            sample_vec1 = sampler.flatchain[::10, 1]
-            p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
-            p1_hdi_min, p1_hdi_max = hdi_of_mcmc(sample_vec1)
-            p0_mean = np.mean(sample_vec0)
-            p1_mean = np.mean(sample_vec1)
-            p0 = np.array([p0_hdi_min, p0_mean, p0_hdi_max])
-            p1 = np.array([p1_hdi_min, p1_mean, p1_hdi_max])
-            np.savetxt(args.savefile, np.vstack((p0, p1)))
+            # TODO: put this to method(sampler, ndim, perc=95)
+            par_list = list()
+            for i in range(ndim):
+                sample_vec = sampler.flatchain[::10, i]
+                p_hdi_min, p_hdi_max = hdi_of_mcmc(sample_vec)
+                p_mean = np.mean(sample_vec)
+                par_list.append(np.array([p_hdi_min, p_mean, p_hdi_max]))
+            np.savetxt(args.savefile, np.vstack(tuple(par_list)))
