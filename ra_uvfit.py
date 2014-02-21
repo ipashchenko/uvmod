@@ -6,23 +6,32 @@ import argparse
 import sys
 import numpy as np
 import math
-from pylab import (errorbar, plot)
+try:
+    from pylab import (errorbar, plot)
+    is_pylab = True
+except ImportError:
+    is_pylab = False
+# my own emcee:)
 sys.path.append('/home/ilya/work/emcee')
 try:
     import emcee
+    is_emcee = True
 except ImportError:
-    raise ImportError('Install ``emcee`` python package to proceed')
+    #raise ImportError('Install ``emcee`` python package to proceed')
+    is_emcee = False
 try:
     import triangle
 except ImportError:
-    raise ImportError('Install ``triangle`` python package to draw beautiful'
-                      ' plots')
+    # raise ImportError('Install ``triangle`` python package to draw beautiful'
+    #                   ' plots')
+    is_triangle = False
 try:
     from scipy.special import erf
     from scipy.optimize import leastsq
     from scipy.stats import uniform
+    is_scipy = True
 except ImportError:
-    sp = None
+    is_scipy = False
 
 
 class LnPost(object):
@@ -304,14 +313,33 @@ class _function_wrapper(object):
             raise
 
 
-# TODO: implement sy being initial guess for uncertainty
 class LS_estimates(object):
     """
     Class that implements estimates of parameters via least squares method.
+
+    The algorithm uses the Levenberg-Marquardt algorithm through `leastsq`.
+    Additional keyword arguments are passed directly to that algorithm. It is
+    almost scipy.optimize.curve_fit but with different arguments of function.
+
+    :param x:
+        Vector of explanatory variable.
+
+    :param y:
+        Vector of response variable.
+
+    :param sy (optional):
+        Vector of uncertainties. If not ``None`` then this vector will be used
+        as relative weights in the least-squares problem. (default: ``None``)
+
     """
+
+    def _weighted_residuals(cls, p, y, sy, model):
+        return (y - model(p)) / sy
+
+    def _residuals(cls, p, y, model):
+        return (y - model(p))
+
     def __init__(self, x, y, sy=None):
-        # if sp is None:
-        #     raise ImportError('scipy')
         self.x = x
         self.y = y
         self.sy = sy
@@ -322,23 +350,44 @@ class LS_estimates(object):
 
         Fitting model log(y) = a * x ** 2 + b
 
-        :param p0 (optional):
+        :param p0:
+            The starting estimate for the minimization.
 
-            The starting estimate for the minimization. If ``None`` is given
-            then use [0., 0.]. (default: ``None``)
+        :return:
+            Optimized vector of parameters and it's covariance matrix.
         """
 
+        if not is_scipy:
+            raise ImportError('Install ``scipy`` to use'
+                              ' ``LS_estimates.fit_1d`` method.')
+
         if p0 is None:
-            p0 = [0., 0.]
+            raise Exception("Define starting estimate for minimization!")
 
-        def residuals(p, x, y, sy):
-            return (np.log(y) - p[0] * x ** 2. - p[1]) / (sy / y)
+        model = Model_1d(self.x)
 
-        p = leastsq(residuals, p0, args=(self.x, self.y, self.sy,))[0]
-        sigma = math.sqrt(-1. / (2. * p[0]))
-        amp = math.exp(p[1])
+        if self.sy is None:
+            func, args = self._residuals, (self.y, model,)
+        else:
+            func, args = self._weighted_residuals, (self.y, self.sy, model)
 
-        return amp, sigma
+        fit = leastsq(func, p0, args=args, full_output=True)
+        (p, pcov, infodict, errmsg, ier) = fit
+
+        if ier not in [1, 2, 3, 4]:
+            msg = "Optimal parameters not found: " + errmsg
+            raise RuntimeError(msg)
+
+        if (len(self.y) > len(p0)) and pcov is not None:
+            # Residual variance
+            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
+            pcov *= s_sq
+        else:
+            pcov = np.inf
+
+        print(p, pcov)
+
+        return p, pcov
 
     def fit_2d(self):
         """
@@ -351,61 +400,63 @@ class LS_estimates(object):
 
 if __name__ == '__main__':
 
-    # # importing
-    # from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
-    # from scipy.stats import uniform
-    # import triangle
+    # importing
+    from ra_uvfit import Model_1d, LnLike, LS_estimates, LnPrior, LnPost
+    from scipy.stats import uniform
+    import triangle
+    sys.path.append('/home/ilya/work/emcee')
+    import emcee
 
-    # # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
-    # print("Generating 1-d data with amp=2, sigma=0.3")
-    # p = [2, 0.3]
-    # x = np.array([0., 0.1, 0.2, 0.4, 0.6])
-    # model = Model_1d(x)
-    # y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
-    # sy = np.random.normal(0.15, 0.025, size=5)
-    # errorbar(x, y, sy, fmt='.k')
-    # xl = np.array([0.5, 0.7])
-    # yl = np.array([0.6, 0.2])
-    # syl = np.random.normal(0.1, 0.03, size=2)
-    # errorbar(xl, yl, syl, fmt='.r', lolims=True)
-    # model_plot = Model_1d(np.arange(750) / 1000.)
-    # plot(np.arange(750) / 1000., model_plot(p))
-    # print(x)
-    # print(y)
-    # print(sy)
+    # Generate 1d-data for given model: 2. * exp(-x ** 2. / (2. * 0.09))
+    print("Generating 1-d data with amp=2, sigma=0.3")
+    p = [2, 0.3]
+    x = np.array([0., 0.1, 0.2, 0.4, 0.6])
+    model = Model_1d(x)
+    y = model([2., 0.3]) + np.random.normal(0, 0.1, size=5)
+    sy = np.random.normal(0.15, 0.025, size=5)
+    errorbar(x, y, sy, fmt='.k')
+    xl = np.array([0.5, 0.7])
+    yl = np.array([0.6, 0.2])
+    syl = np.random.normal(0.1, 0.03, size=2)
+    errorbar(xl, yl, syl, fmt='.r', lolims=True)
+    model_plot = Model_1d(np.arange(750) / 1000.)
+    plot(np.arange(750) / 1000., model_plot(p))
+    print(x)
+    print(y)
+    print(sy)
 
-    # # Testing ``LnLike``
-    # print("Testing ``LnLike``")
-    # lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
-    # lnlike._lnprob[0].__call__(p)
-    # lnlike._lnprob[1].__call__(p)
-    # lnlike(p)
+    # Testing ``LnLike``
+    print("Testing ``LnLike``")
+    lnlike = LnLike(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl)
+    lnlike._lnprob[0].__call__(p)
+    lnlike._lnprob[1].__call__(p)
+    lnlike(p)
 
-    # # Testing ``LS_estimates``
-    # print("Testing ``LS_estimates``")
-    # lsq = LS_estimates(x, y, sy=sy)
-    # amp, sigma = lsq.fit_1d()
-    # print ("amp = " + str(amp), "sigma = " + str(sigma))
+    # Testing ``LS_estimates``
+    print("Testing ``LS_estimates``")
+    lsq = LS_estimates(x, y, sy=sy)
+    p, pcov = lsq.fit_1d([1., 1.])
+    print (p, pcov)
 
-    # # Testing ``LnPost``
-    # lnprs = ((uniform.logpdf, [0, 10], dict(),),
-    #          (uniform.logpdf, [0, 2], dict(),),)
-    # lnpr = LnPrior(lnprs)
-    # lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
-    #                 lnpr=lnpr)
-    # assert(lnpost._lnpr(p) == lnpr(p))
-    # assert(lnpost._lnlike(p) == lnlike(p))
+    # Testing ``LnPost``
+    lnprs = ((uniform.logpdf, [0, 10], dict(),),
+             (uniform.logpdf, [0, 2], dict(),),)
+    lnpr = LnPrior(lnprs)
+    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
+                    lnpr=lnpr)
+    assert(lnpost._lnpr(p) == lnpr(p))
+    assert(lnpost._lnlike(p) == lnlike(p))
 
-    # # Using affine-invariant MCMC
-    # nwalkers = 250
-    # ndim = 2
-    # p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
-    # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-    # pos, prob, state = sampler.run_mcmc(p0, 250)
-    # sampler.reset()
-    # sampler.run_mcmc(pos, 500)
-    # # Visualize with triangle.py
-    # triangle.corner(sampler.flatchain[::10, :])
+    # Using affine-invariant MCMC
+    nwalkers = 250
+    ndim = 2
+    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+    pos, prob, state = sampler.run_mcmc(p0, 250)
+    sampler.reset()
+    sampler.run_mcmc(pos, 500)
+    # Visualize with triangle.py
+    triangle.corner(sampler.flatchain[::10, :])
 
     parser =\
         argparse.ArgumentParser(description="Fit simple models in uv-plane",
@@ -477,7 +528,6 @@ if __name__ == '__main__':
     max_amp = args.max_amp or 10. * np.max(y)
     max_std = args.max_std or np.std(y)
 
-
     lnprs = ((uniform.logpdf, [0, max_amp], dict(),),
              (uniform.logpdf, [0, max_std], dict(),),)
     lnpr = LnPrior(lnprs)
@@ -496,10 +546,3 @@ if __name__ == '__main__':
     figure = triangle.corner(sampler.flatchain[::10, :])
     print ("Saving figure to " + args.savefig)
     figure.savefig(args.savefig)
-
-
-
-
-
-
-
