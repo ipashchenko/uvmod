@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import math
 try:
-    from pylab import (errorbar, plot)
+    from pylab import (errorbar, plot, savefig)
     is_pylab = True
 except ImportError:
     is_pylab = False
@@ -318,6 +318,7 @@ class _function_wrapper(object):
             raise
 
 
+# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``
 class LS_estimates(object):
     """
     Class that implements estimates of parameters via least squares method.
@@ -434,33 +435,45 @@ if __name__ == '__main__':
 
     parser.add_argument('-leastsq', action='store_true', dest='use_leastsq',
                         default=False,
-                        help='use scipy.optimize.leastsq for analysis of'
-                             ' detections.')
+                        help='- use scipy.optimize.leastsq for analysis of'
+                             ' detections')
+    parser.add_argument('-p0', action='store', dest='p0', nargs='+',
+                        default=None, type=float, help='- starting estimates'
+                                                       ' for the minimization'
+                                                       ' or center of initial'
+                                                       ' ball for MCMC')
     parser.add_argument('-2d', action='store_true', dest='use_2d',
-                        default=False, help='Use 2D-fitting?')
+                        default=False, help='- use 2D-fitting?')
     parser.add_argument('path_to_detections', type=str, metavar='detections',
-                        help='path to file with detections data.')
+                        help='- path to file with detections data')
     parser.add_argument('path_to_ulimits', nargs='?', metavar='upper limits',
-                        default=None, type=str, help='path to file with upper'
-                                                     ' limits data.')
+                        default=None, type=str, help=' - path to file with'
+                                                     ' upper limits data')
     parser.add_argument('-max_amp', action='store', nargs='?', default=None,
-                        type=float, help='maximum amplitude for uniform prior'
+                        type=float, help='- maximum amplitude for uniform prior'
                                          ' distribution. If not given => use 10'
                                          ' x max(data)')
     parser.add_argument('-max_std', action='store', nargs='?', default=None,
-                        type=float, help='maximum uncertainty for uniform prior'
-                                         ' distribution. If not given => use'
-                                         ' std(data)')
+                        type=float, help='- maximum uncertainty for uniform'
+                                         ' prior distribution. If not given =>'
+                                         ' use std(data)')
     parser.add_argument('-savefig', action='store', nargs='?',
-                        default='uvmod_figure.png', metavar='path to file',
-                        type=str, help='file to save corner plot of posterior'
-                                       ' PDF. If not given =>'
-                                       ' "uvmod_figure.py".')
+                        default=None, metavar='path to file',
+                        type=str, help='- file to save plots of posterior'
+                                       ' PDF (if ``triangle.py`` is installed)'
+                                       ' or histograms.')
+    parser.add_argument('-savefile', action='store', nargs='?', default=None,
+                        metavar='path to file', type=str, help='- file to save'
+                                                               ' results')
 
     args = parser.parse_args()
 
-    # if not args.remote_dir:
-    #     sys.exit("Use -asc/-difx flags to select archive's fits-files")
+    if args.use_2d:
+        raise NotImplementedError("Coming soon!")
+
+    if args.use_leastsq and (not args.p0):
+        sys.exit("Use -p0 flag to specify the list of starting values for"
+                 " minimization!")
 
     print(parser.parse_args())
 
@@ -491,27 +504,66 @@ if __name__ == '__main__':
                 xl1, xl2, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
             xl = np.column_stack((xl1, xl2,))
 
+    xmax = max(np.hstack((x, xl)))
     print (x, y, sy, xl, yl, syl)
 
-    # If no ranges for uniform priors are given => calculate them
-    max_amp = args.max_amp or 10. * np.max(y)
-    max_std = args.max_std or np.std(y)
+    # If we are told to use LS
+    if args.use_leastsq:
+        lsq = LS_estimates(x, y, sy=sy)
+        p, pcov = lsq.fit_1d(args.p0)
 
-    lnprs = ((uniform.logpdf, [0, max_amp], dict(),),
-             (uniform.logpdf, [0, max_std], dict(),),)
-    lnpr = LnPrior(lnprs)
-    lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
-                    lnpr=lnpr)
+        if args.savefig:
+            errorbar(x, y, sy, fmt='.k')
+            errorbar(xl, yl, syl, fmt='.r', lolims=True)
+            model_plot = Model_1d(np.arange(1000.) * xmax / 1000.)
+            plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+            savefig(args.savefig)
 
-    # Using affine-invariant MCMC
-    nwalkers = 250
-    ndim = 2
-    p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-    pos, prob, state = sampler.run_mcmc(p0, 250)
-    sampler.reset()
-    sampler.run_mcmc(pos, 500)
-    # Visualize with triangle.py
-    figure = triangle.corner(sampler.flatchain[::10, :])
-    print ("Saving figure to " + args.savefig)
-    figure.savefig(args.savefig)
+        if args.savefile:
+            np.savetxt(args.savefile, p)
+            f_handle = file(args.savefile, 'a')
+            np.savetxt(f_handle, pcov)
+
+    # If not => use MCMC
+    else:
+        # If no ranges for uniform priors are given => calculate them
+        max_amp = args.max_amp or 10. * np.max(y)
+        max_std = args.max_std or np.std(y)
+
+        lnprs = ((uniform.logpdf, [0, max_amp], dict(),),
+                 (uniform.logpdf, [0, max_std], dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
+                        lnpr=lnpr)
+
+        # Using affine-invariant MCMC
+        nwalkers = 250
+        ndim = 2
+        p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+        pos, prob, state = sampler.run_mcmc(p0, 250)
+        sampler.reset()
+        sampler.run_mcmc(pos, 500)
+        # Visualize with triangle.py
+        if args.savefig:
+            # If ``triangle.py`` is install use it for corner plot of posterior
+            # PDF
+            if is_triangle:
+                figure = triangle.corner(sampler.flatchain[::10, :])
+                print ("Saving figure to " + args.savefig)
+                figure.savefig(args.savefig)
+            # Plot histogram stuff wo triangle
+            else:
+                raise NotImplementedError("Coming soon!")
+
+        if args.savefile:
+            sample_vec0 = sampler.flatchain[::10, 0]
+            sample_vec1 = sampler.flatchain[::10, 1]
+            p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
+            p1_hdi_min, p1_hdi_max = hdi_of_mcmc(sample_vec1)
+            p0_mean = np.mean(sample_vec0)
+            p1_mean = np.mean(sample_vec1)
+            p0 = np.array([p0_hdi_min, p0_mean, p0_hdi_max])
+            p1 = np.array([p1_hdi_min, p1_mean, p1_hdi_max])
+            np.savetxt(args.savefile, np.vstack((p0, p1)))
+
