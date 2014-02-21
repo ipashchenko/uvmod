@@ -398,6 +398,25 @@ class LS_estimates(object):
         raise NotImplementedError()
 
 
+def hdi_of_mcmc(sample_vec, cred_mass=0.95):
+    """
+    Highest density interval of sample.
+    """
+
+    assert len(sample_vec), 'need points to find HDI'
+    sorted_pts = np.sort(sample_vec)
+
+    ci_idx_inc = int(np.floor(cred_mass * len(sorted_pts)))
+    n_cis = len(sorted_pts) - ci_idx_inc
+    ci_width = sorted_pts[ci_idx_inc:] - sorted_pts[:n_cis]
+
+    min_idx = np.argmin(ci_width)
+    hdi_min = sorted_pts[min_idx]
+    hdi_max = sorted_pts[min_idx + ci_idx_inc]
+
+    return hdi_min, hdi_max
+
+
 if __name__ == '__main__':
 
     # importing
