@@ -562,7 +562,14 @@ if __name__ == '__main__':
         sampler.reset()
         sampler.run_mcmc(pos, 500)
 
-        # TODO: print some info
+        # TODO: print info
+        # TODO: put this to method(sampler, ndim, perc=95)
+        par_list = list()
+        for i in range(ndim):
+            sample_vec = sampler.flatchain[::10, i]
+            p_hdi_min, p_hdi_max = hdi_of_mcmc(sample_vec)
+            p_mean = np.mean(sample_vec)
+            par_list.append([p_hdi_min, p_mean, p_hdi_max])
 
         # Visualize with triangle.py
         if args.savefig:
@@ -577,11 +584,4 @@ if __name__ == '__main__':
                 raise NotImplementedError("Coming soon!")
 
         if args.savefile:
-            # TODO: put this to method(sampler, ndim, perc=95)
-            par_list = list()
-            for i in range(ndim):
-                sample_vec = sampler.flatchain[::10, i]
-                p_hdi_min, p_hdi_max = hdi_of_mcmc(sample_vec)
-                p_mean = np.mean(sample_vec)
-                par_list.append(np.array([p_hdi_min, p_mean, p_hdi_max]))
-            np.savetxt(args.savefile, np.vstack(tuple(par_list)))
+            np.savetxt(args.savefile, np.asarray(par_list))
