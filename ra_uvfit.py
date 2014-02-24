@@ -333,7 +333,9 @@ class _function_wrapper(object):
             raise
 
 
-# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``
+# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``.
+# TODO: Create Abstraqct Class for LS_estimates and inherit it. Code for fitting
+# in ``fit_1d`` and ``fit_2d`` is almost the same.
 class LS_estimates(object):
     """
     Class that implements estimates of parameters via least squares method.
