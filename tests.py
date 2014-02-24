@@ -182,3 +182,28 @@ class Test_2D_isoptopic(TestCase):
         self.assertGreater(lnpost(self.p), lnpost(self.p2))
         self.assertGreater(lnpost(self.p), lnpost(self.p3))
         self.assertGreater(lnpost(self.p), lnpost(self.p4))
+
+    @skipIf((not is_emcee) or (not is_scipy), "``emcee`` and/or ``scipy``  not"
+                                              " installed")
+    def test_MCMC(self):
+        nwalkers = 250
+        ndim = 2
+        p0 = np.random.uniform(low=self.p1_range[0], high=self.p1_range[1],
+                               size=(nwalkers, ndim))
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnpost = LnPost(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
+                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+        pos, prob, state = sampler.run_mcmc(p0, 250)
+        sampler.reset()
+        sampler.run_mcmc(pos, 500)
+
+        sample_vec0 = sampler.flatchain[::10, 0]
+        sample_vec1 = sampler.flatchain[::10, 1]
+        p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
+        p1_hdi_min, p1_hdi_max = hdi_of_mcmc(sample_vec1)
+
+        self.assertTrue((p0_hdi_min < self.p[0] < p0_hdi_max))
+        self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
