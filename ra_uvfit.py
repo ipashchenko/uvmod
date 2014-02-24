@@ -152,7 +152,7 @@ class LnLike(object):
         if self.x.ndim == 1:
             self._model = Model_1d
         elif self.x.ndim == 2:
-            self._model = Model_2d
+            self._model = Model_2d_isotropic
 
         self._lnprob = list()
         self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy))
@@ -186,12 +186,26 @@ class Model(object):
 
 class Model_1d(Model):
     def __call__(self, p):
-        return p[0] * np.exp(-self.x ** 2 / (2. * p[1] ** 2))
+        return p[0] * np.exp(-self.x ** 2. / (2. * p[1] ** 2.))
 
 
-class Model_2d(Model):
+class Model_2d_anisotropic(Model):
     def __call__(self, p):
-        raise NotImplementedError('Coming soon!')
+        """
+        :param p:
+            Parameter vector (amplitude, width, width, rotation angle)
+        """
+        x = self.x[:, 0]
+        y = self.x[:, 1]
+        return p[0] * np.exp((x * math.cos(p[3]) - y * math.sin(p[3])) ** 2. /
+            (2. * p[1] ** 2.) + (x * math.sin(p[3]) + y * math.cos(p[3])) ** 2.\
+            / (2. * p[2] ** 2.))
+
+class Model_2d_isotropic(Model):
+    def __call__(self, p):
+        x = self.x[:, 0]
+        y = self.x[:, 1]
+        return p[0] * np.exp((-x ** 2. - y ** 2.) / (2. * p[1] ** 2.))
 
 
 class LnProb(object):
