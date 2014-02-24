@@ -4,7 +4,7 @@
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
 from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior, LnPost,
-                      hdi_of_mcmc)
+                      hdi_of_mcmc, Model_2d_isotropic, Model_2d_anisotropic)
 try:
     from scipy.stats import uniform
     is_scipy = True
@@ -113,3 +113,32 @@ class Test_1D(TestCase):
 
         self.assertTrue((p0_hdi_min < self.p[0] < p0_hdi_max))
         self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
+
+
+class Test_2D_isoptopic(TestCase):
+    def setUp(self):
+        self.p = [2, 0.3]
+        self.x1 = np.random.uniform(low=-1, high=1, size=10)
+        self.x2 = np.random.uniform(low=-1, high=1, size=10)
+        # Flux at zero uv-spacing - but we need general perfomance
+        #self.x[0] = 0.
+        #self.y[0] = 0.
+        self.xx = np.column_stack((self.x1, self.x2))
+        self.model_2d = Model_2d_isotropic(self.xx)
+        self.y = self.model_2d(self.p) + np.random.normal(0, 0.1, size=10)
+        self.sy = np.random.normal(0.15, 0.025, size=10)
+        self.x1l = np.hstack((np.random.uniform(low=-1, high=-0.5, size=2),
+                             np.random.uniform(low=0.5, high=1, size=2),))
+        self.x2l = np.hstack((np.random.uniform(low=-1, high=-0.5, size=2),
+                             np.random.uniform(low=0.5, high=1, size=2),))
+        self.xxl = np.column_stack((self.x1l, self.x2l))
+        self.yl = self.model_2d(self.p) + abs(np.random.normal(0, 0.1, size=4))
+        self.syl = np.random.normal(0.1, 0.03, size=4)
+        self.p1 = np.asarray(self.p) + np.array([1., 0.])
+        self.p2 = np.asarray(self.p) + np.array([-1., 0.])
+        self.p3 = np.asarray(self.p) + np.array([0., 0.2])
+        self.p4 = np.asarray(self.p) + np.array([0., -0.2])
+        self.p0_range = [0., 10.]
+        self.p1_range = [0., 2.]
+        print(is_scipy)
+        print(is_emcee)
