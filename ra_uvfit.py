@@ -197,9 +197,9 @@ class Model_2d_anisotropic(Model):
         """
         x = self.x[:, 0]
         y = self.x[:, 1]
-        return p[0] * np.exp((x * math.cos(p[3]) - y * math.sin(p[3])) ** 2. /
+        return p[0] * np.exp(-((x * math.cos(p[3]) - y * math.sin(p[3])) ** 2. /
             (2. * p[1] ** 2.) + (x * math.sin(p[3]) + y * math.cos(p[3])) ** 2.\
-            / (2. * p[2] ** 2.))
+            / (2. * p[2] ** 2.)))
 
 class Model_2d_isotropic(Model):
     def __call__(self, p):
