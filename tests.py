@@ -158,3 +158,11 @@ class Test_2D_isoptopic(TestCase):
         self.assertGreater(lnlike(self.p), lnlike(self.p3))
         self.assertGreater(lnlike(self.p), lnlike(self.p4))
 
+    #@skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LS_estimates(self):
+        lsq = LS_estimates(self.xx, self.y, sy=self.sy)
+        p, pcov = lsq.fit_2d_isotropic([1., 1.])
+        delta0 = 3. * np.sqrt(pcov[0, 0])
+        delta1 = 3. * np.sqrt(pcov[1, 1])
+        self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
+        self.assertAlmostEqual(self.p[1], p[1], delta=delta1)
