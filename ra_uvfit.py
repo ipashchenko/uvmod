@@ -205,9 +205,10 @@ class Model_2d_isotropic(Model):
     def __call__(self, p):
         x = self.x[:, 0]
         y = self.x[:, 1]
-        return p[0] * np.exp((-x ** 2. - y ** 2.) / (2. * p[1] ** 2.))
+        return p[0] * np.exp((-x ** 2. - y ** 2.) ** 2. / (2. * p[1] ** 2.))
 
 
+# TODO: Don't need explanatory variable ``x`` in __init__
 class LnProb(object):
     """
     Basic class that calculates the probability of parameters given
