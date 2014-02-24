@@ -371,8 +371,6 @@ class LS_estimates(object):
         """
         LS for 1D data.
 
-        Fitting model log(y) = a * x ** 2 + b
-
         :param p0:
             The starting estimate for the minimization.
 
@@ -416,8 +414,6 @@ class LS_estimates(object):
         """
         LS for 2D data.
 
-        Fitting model log(y) = a * x ** 2 + b
-
         :param p0:
             The starting estimate for the minimization.
 
@@ -432,6 +428,49 @@ class LS_estimates(object):
             raise Exception("Define starting estimate for minimization!")
 
         model = Model_2d_isotropic(self.x)
+
+        if self.sy is None:
+            func, args = self._residuals, (self.y, model,)
+        else:
+            func, args = self._weighted_residuals, (self.y, self.sy, model)
+
+        fit = leastsq(func, p0, args=args, full_output=True)
+        (p, pcov, infodict, errmsg, ier) = fit
+
+        if ier not in [1, 2, 3, 4]:
+            msg = "Optimal parameters not found: " + errmsg
+            raise RuntimeError(msg)
+
+        if (len(self.y) > len(p0)) and pcov is not None:
+            # Residual variance
+            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
+            pcov *= s_sq
+        else:
+            pcov = np.inf
+
+        if p[1] < 0:
+            p[1] *= -1.
+
+        return p, pcov
+
+    def fit_2d_anisotropic(self, p0=None):
+        """
+        LS for 2D data.
+
+        :param p0:
+            The starting estimate for the minimization.
+
+        :return:
+            Optimized vector of parameters and it's covariance matrix.
+        """
+
+        if not is_scipy:
+            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
+                              + str(self.__class__))
+        if p0 is None:
+            raise Exception("Define starting estimate for minimization!")
+
+        model = Model_2d_anisotropic(self.x)
 
         if self.sy is None:
             func, args = self._residuals, (self.y, model,)
