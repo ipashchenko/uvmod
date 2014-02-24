@@ -166,3 +166,19 @@ class Test_2D_isoptopic(TestCase):
         delta1 = 3. * np.sqrt(pcov[1, 1])
         self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
         self.assertAlmostEqual(self.p[1], p[1], delta=delta1)
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnPost(self):
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnlike = LnLike(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
+                        y_limits=self.yl, sy_limits=self.syl)
+        lnpost = LnPost(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
+                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        self.assertEqual(lnpost._lnpr(self.p), lnpr(self.p))
+        self.assertEqual(lnpost._lnlike(self.p), lnlike(self.p))
+        self.assertGreater(lnpost(self.p), lnpost(self.p1))
+        self.assertGreater(lnpost(self.p), lnpost(self.p2))
+        self.assertGreater(lnpost(self.p), lnpost(self.p3))
+        self.assertGreater(lnpost(self.p), lnpost(self.p4))
