@@ -5,6 +5,7 @@ from __future__ import print_function
 import argparse
 import sys
 import numpy as np
+import warnings
 import math
 try:
     from pylab import (errorbar, plot, savefig)
@@ -17,14 +18,14 @@ try:
     import emcee
     is_emcee = True
 except ImportError:
-    raise ImportWarning('Install ``emcee`` python package to use MCMC.')
+    warnings.warn('Install ``emcee`` python package to use MCMC.')
     is_emcee = False
 try:
     import triangle
     is_triangle = True
 except ImportError:
-    raise ImportWarning('Install ``triangle`` python package to draw beautiful'
-                        ' corner plots of posterior PDF.')
+    warnings.warn('Install ``triangle.py`` python package to draw beautiful'
+                  ' corner plots of posterior PDF.')
     is_triangle = False
 try:
     from scipy.special import erf
@@ -32,8 +33,8 @@ try:
     from scipy.stats import uniform
     is_scipy = True
 except ImportError:
-    raise ImportWarning('Install ``scipy`` python package to use least squares'
-                        ' estimates.')
+    warnings.warn('Install ``scipy`` python package to use least squares'
+                  ' estimates.')
     is_scipy = False
 
 
@@ -148,11 +149,12 @@ class LnLike(object):
         if self.sy is not None:
             assert(len(self.y) == len(self.sy))
 
+        # TODO: Some logic for choosing 2d (iso vs. aniso) is needed
         # Choose method for model calculation here
         if self.x.ndim == 1:
             self._model = Model_1d
         elif self.x.ndim == 2:
-            self._model = Model_2d
+            self._model = Model_2d_isotropic
 
         self._lnprob = list()
         self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy))
@@ -186,14 +188,29 @@ class Model(object):
 
 class Model_1d(Model):
     def __call__(self, p):
-        return p[0] * np.exp(-self.x ** 2 / (2. * p[1] ** 2))
+        return p[0] * np.exp(-self.x ** 2. / (2. * p[1] ** 2.))
 
 
-class Model_2d(Model):
+class Model_2d_anisotropic(Model):
     def __call__(self, p):
-        raise NotImplementedError('Coming soon!')
+        """
+        :param p:
+            Parameter vector (amplitude, width, width, rotation angle)
+        """
+        x = self.x[:, 0]
+        y = self.x[:, 1]
+        return p[0] * np.exp(-((x * math.cos(p[3]) - y * math.sin(p[3])) ** 2. /
+            (2. * p[1] ** 2.) + (x * math.sin(p[3]) + y * math.cos(p[3])) ** 2.\
+            / (2. * p[2] ** 2.)))
+
+class Model_2d_isotropic(Model):
+    def __call__(self, p):
+        x = self.x[:, 0]
+        y = self.x[:, 1]
+        return p[0] * np.exp(-(x ** 2. + y ** 2.) ** 2. / (2. * p[1] ** 2.))
 
 
+# TODO: Don't need explanatory variable ``x`` in __init__
 class LnProb(object):
     """
     Basic class that calculates the probability of parameters given
@@ -318,7 +335,9 @@ class _function_wrapper(object):
             raise
 
 
-# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``
+# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``.
+# TODO: Create Abstraqct Class for LS_estimates and inherit it. Code for fitting
+# in ``fit_1d`` and ``fit_2d`` is almost the same.
 class LS_estimates(object):
     """
     Class that implements estimates of parameters via least squares method.
@@ -353,8 +372,6 @@ class LS_estimates(object):
     def fit_1d(self, p0=None):
         """
         LS for 1D data.
-
-        Fitting model log(y) = a * x ** 2 + b
 
         :param p0:
             The starting estimate for the minimization.
@@ -395,13 +412,91 @@ class LS_estimates(object):
 
         return p, pcov
 
-    def fit_2d(self):
+    def fit_2d_isotropic(self, p0=None):
         """
         LS for 2D data.
 
-        Fitting model log(y) = a * x ** 2 + b
+        :param p0:
+            The starting estimate for the minimization.
+
+        :return:
+            Optimized vector of parameters and it's covariance matrix.
         """
-        raise NotImplementedError()
+
+        if not is_scipy:
+            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
+                              + str(self.__class__))
+        if p0 is None:
+            raise Exception("Define starting estimate for minimization!")
+
+        model = Model_2d_isotropic(self.x)
+
+        if self.sy is None:
+            func, args = self._residuals, (self.y, model,)
+        else:
+            func, args = self._weighted_residuals, (self.y, self.sy, model)
+
+        fit = leastsq(func, p0, args=args, full_output=True)
+        (p, pcov, infodict, errmsg, ier) = fit
+
+        if ier not in [1, 2, 3, 4]:
+            msg = "Optimal parameters not found: " + errmsg
+            raise RuntimeError(msg)
+
+        if (len(self.y) > len(p0)) and pcov is not None:
+            # Residual variance
+            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
+            pcov *= s_sq
+        else:
+            pcov = np.inf
+
+        if p[1] < 0:
+            p[1] *= -1.
+
+        return p, pcov
+
+    def fit_2d_anisotropic(self, p0=None):
+        """
+        LS for 2D data.
+
+        :param p0:
+            The starting estimate for the minimization.
+
+        :return:
+            Optimized vector of parameters and it's covariance matrix.
+        """
+
+        if not is_scipy:
+            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
+                              + str(self.__class__))
+        if p0 is None:
+            raise Exception("Define starting estimate for minimization!")
+
+        model = Model_2d_anisotropic(self.x)
+
+        if self.sy is None:
+            func, args = self._residuals, (self.y, model,)
+        else:
+            func, args = self._weighted_residuals, (self.y, self.sy, model)
+
+        fit = leastsq(func, p0, args=args, full_output=True)
+        (p, pcov, infodict, errmsg, ier) = fit
+
+        if ier not in [1, 2, 3, 4]:
+            msg = "Optimal parameters not found: " + errmsg
+            raise RuntimeError(msg)
+
+        if (len(self.y) > len(p0)) and pcov is not None:
+            # Residual variance
+            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
+            pcov *= s_sq
+        else:
+            pcov = np.inf
+
+        if p[1] < 0:
+            p[1] *= -1.
+
+        return p, pcov
 
 
 def hdi_of_mcmc(sample_vec, cred_mass=0.95):
@@ -494,7 +589,7 @@ if __name__ == '__main__':
 
     print(parser.parse_args())
 
-    # TODO: refactor to function func(fname, tuple_of_dim, optional_tuple)
+    # TODO: Refactor to function func(fname, tuple_of_dim, optional_tuple)
     # Pre-initialize in case of no uncertainties supplied
     xl, yl, sy, syl = [None] * 4
     if not args.use_2d:
@@ -522,7 +617,8 @@ if __name__ == '__main__':
             xl = np.column_stack((xl1, xl2,))
 
     xmax = max(np.hstack((x, xl)))
-    print (x, y, sy, xl, yl, syl)
+    print ("x, y, sy, xl, yl, syl")
+    print(x, y, sy, xl, yl, syl)
 
     # If we are told to use LS
     if args.use_leastsq:
@@ -534,29 +630,33 @@ if __name__ == '__main__':
             errorbar(xl, yl, syl, fmt='.r', lolims=True)
             model_plot = Model_1d(np.arange(1000.) * xmax / 1000.)
             plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+            print ("Saving figure to " + args.savefig)
             savefig(args.savefig)
 
         if args.savefile:
+            print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, p)
             f_handle = file(args.savefile, 'a')
             np.savetxt(f_handle, pcov)
 
     # If not => use MCMC
     else:
-        lnprs = ((uniform.logpdf, [0, args.max_p[0]], dict(),),
-                 (uniform.logpdf, [0, args.max_p[1]], dict(),),)
+        # TODO: select number of components according to input
+        lnpr_list = list()
+        for i, max_p in enumerate(args.max_p):
+            lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
+        lnprs = tuple(lnpr_list)
         lnpr = LnPrior(lnprs)
         lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
                         lnpr=lnpr)
 
         # Using affine-invariant MCMC
         nwalkers = 250
-        ndim = 2
+        ndim = len(lnprs)
         if not args.p0:
             p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
         else:
             p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
-        print(p0, np.shape(p0))
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
         pos, prob, state = sampler.run_mcmc(p0, 250)
         sampler.reset()
@@ -584,4 +684,5 @@ if __name__ == '__main__':
                 raise NotImplementedError("Coming soon!")
 
         if args.savefile:
+            print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, np.asarray(par_list))
