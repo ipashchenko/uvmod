@@ -21,8 +21,9 @@ import numpy as np
 import math
 
 
-# TODO: fix random state to guarantee passing
-@skip
+# TODO: Add tests for data wo uncertainties
+# TODO: Add tests for not installed packages
+# TODO: Fix random state to guarantee passing
 class Test_1D(TestCase):
     def setUp(self):
         self.p = [2, 0.3]
@@ -206,9 +207,10 @@ class Test_2D_isoptopic(TestCase):
         self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
 
 
+@skip
 class Test_2D_anisoptopic(TestCase):
     def setUp(self):
-        self.p = [2, 0.3, 0.5, 0.]
+        self.p = [2, 0.3, 0.7, 0.]
         self.x1 = np.random.uniform(low=-1, high=1, size=10)
         self.x2 = np.random.uniform(low=-1, high=1, size=10)
         # Flux at zero uv-spacing - but we need general perfomance
@@ -216,7 +218,7 @@ class Test_2D_anisoptopic(TestCase):
         #self.y[0] = 0.
         self.xx = np.column_stack((self.x1, self.x2))
         self.model_2d = Model_2d_anisotropic(self.xx)
-        self.y = self.model_2d(self.p) + np.random.normal(0, 0.1, size=10)
+        self.y = self.model_2d(self.p) + np.random.normal(0, 0.05, size=10)
         self.sy = np.random.normal(0.15, 0.025, size=10)
         self.x1l = np.hstack((np.random.uniform(low=-1, high=-0.5, size=2),
                               np.random.uniform(low=0.5, high=1, size=2),))
@@ -224,18 +226,34 @@ class Test_2D_anisoptopic(TestCase):
                               np.random.uniform(low=0.5, high=1, size=2),))
         self.xxl = np.column_stack((self.x1l, self.x2l))
         self.model_2d_limits = Model_2d_anisotropic(self.xxl)
-        self.yl = self.model_2d_limits(self.p) + abs(np.random.normal(0, 0.1,
+        self.yl = self.model_2d_limits(self.p) + abs(np.random.normal(0, 0.05,
                                                                       size=4))
         self.syl = np.random.normal(0.1, 0.03, size=4)
         self.p1 = np.asarray(self.p) + np.array([1., 0., 0., 0.])
         self.p2 = np.asarray(self.p) + np.array([-1., 0., 0., 0.])
         self.p3 = np.asarray(self.p) + np.array([0., 0.2, 0., 0.])
         self.p4 = np.asarray(self.p) + np.array([0., -0.2, 0., 0.])
-        self.p5 = np.asarray(self.p) + np.array([0., 0., 0.3, 0.])
-        self.p6 = np.asarray(self.p) + np.array([0., 0., -0.3, 0.])
+        self.p5 = np.asarray(self.p) + np.array([0., 0., 0.4, 0.])
+        self.p6 = np.asarray(self.p) + np.array([0., 0., -0.4, 0.])
         self.p7 = np.asarray(self.p) + np.array([0., 0., 0., math.pi / 2.])
-        self.p7 = np.asarray(self.p) + np.array([0., 0., 0., -math.pi / 2.])
+        self.p8 = np.asarray(self.p) + np.array([0., 0., 0., -math.pi / 2.])
         self.p0_range = [0., 10.]
         self.p1_range = [0., 2.]
         self.p2_range = [0., 2.]
         self.p3_range = [0., math.pi]
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnLike(self):
+        lnlike = LnLike(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
+                        y_limits=self.yl, sy_limits=self.syl)
+        lnlik0 = lnlike._lnprob[0].__call__(self.p)
+        lnlik1 = lnlike._lnprob[1].__call__(self.p)
+        self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
+        self.assertGreater(lnlike(self.p), lnlike(self.p1))
+        self.assertGreater(lnlike(self.p), lnlike(self.p2))
+        self.assertGreater(lnlike(self.p), lnlike(self.p3))
+        self.assertGreater(lnlike(self.p), lnlike(self.p4))
+        self.assertGreater(lnlike(self.p), lnlike(self.p5))
+        self.assertGreater(lnlike(self.p), lnlike(self.p6))
+        self.assertGreater(lnlike(self.p), lnlike(self.p7))
+        self.assertGreater(lnlike(self.p), lnlike(self.p8))
