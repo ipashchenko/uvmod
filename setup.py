@@ -1,4 +1,3 @@
-import uvmod
 try:
     from setuptools import setup
     setup
@@ -9,11 +8,11 @@ except ImportError:
 
 setup(
     name='uvmod',
-    version=uvmod.version,
+    version='0.1',
     author='Ilya Pashchenko',
     author_email='in4pashchenko@gmail.com',
     packages=['uvmod'],
-    scripts=[],
+    scripts=['bin/fit_amp.py'],
     url='',
     test_suit='tests',
     license='LICENSE',
