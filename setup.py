@@ -15,11 +15,11 @@ setup(
     packages=['uvmod'],
     scripts=[],
     url='',
-    test_suit='tests'
+    test_suit='tests',
     license='LICENSE',
     description='Simple models',
     long_description=open('README.rst').read(),
     install_requires=[
-        "numpy >= 1.7.0",
+        "numpy >= 1.7.2",
         "scipy == 0.13.3",
-    ],
+    ],)
