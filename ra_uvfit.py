@@ -5,6 +5,7 @@ from __future__ import print_function
 import argparse
 import sys
 import numpy as np
+import warnings
 import math
 try:
     from pylab import (errorbar, plot, savefig)
@@ -17,14 +18,14 @@ try:
     import emcee
     is_emcee = True
 except ImportError:
-    raise ImportWarning('Install ``emcee`` python package to use MCMC.')
+    warnings.warn('Install ``emcee`` python package to use MCMC.')
     is_emcee = False
 try:
     import triangle
     is_triangle = True
 except ImportError:
-    raise ImportWarning('Install ``triangle`` python package to draw beautiful'
-                        ' corner plots of posterior PDF.')
+    warnings.warn('Install ``triangle.py`` python package to draw beautiful'
+                  ' corner plots of posterior PDF.')
     is_triangle = False
 try:
     from scipy.special import erf
@@ -32,8 +33,8 @@ try:
     from scipy.stats import uniform
     is_scipy = True
 except ImportError:
-    raise ImportWarning('Install ``scipy`` python package to use least squares'
-                        ' estimates.')
+    warnings.warn('Install ``scipy`` python package to use least squares'
+                  ' estimates.')
     is_scipy = False
 
 
@@ -587,7 +588,7 @@ if __name__ == '__main__':
 
     print(parser.parse_args())
 
-    # TODO: refactor to function func(fname, tuple_of_dim, optional_tuple)
+    # TODO: Refactor to function func(fname, tuple_of_dim, optional_tuple)
     # Pre-initialize in case of no uncertainties supplied
     xl, yl, sy, syl = [None] * 4
     if not args.use_2d:
@@ -615,7 +616,8 @@ if __name__ == '__main__':
             xl = np.column_stack((xl1, xl2,))
 
     xmax = max(np.hstack((x, xl)))
-    print (x, y, sy, xl, yl, syl)
+    print ("x, y, sy, xl, yl, syl")
+    print(x, y, sy, xl, yl, syl)
 
     # If we are told to use LS
     if args.use_leastsq:
@@ -627,9 +629,11 @@ if __name__ == '__main__':
             errorbar(xl, yl, syl, fmt='.r', lolims=True)
             model_plot = Model_1d(np.arange(1000.) * xmax / 1000.)
             plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+            print ("Saving figure to " + args.savefig)
             savefig(args.savefig)
 
         if args.savefile:
+            print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, p)
             f_handle = file(args.savefile, 'a')
             np.savetxt(f_handle, pcov)
@@ -677,4 +681,5 @@ if __name__ == '__main__':
                 raise NotImplementedError("Coming soon!")
 
         if args.savefile:
+            print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, np.asarray(par_list))
