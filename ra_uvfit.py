@@ -640,20 +640,22 @@ if __name__ == '__main__':
 
     # If not => use MCMC
     else:
-        lnprs = ((uniform.logpdf, [0, args.max_p[0]], dict(),),
-                 (uniform.logpdf, [0, args.max_p[1]], dict(),),)
+        # TODO: select number of components according to input
+        lnpr_list = list()
+        for i, max_p in enumerate(args.max_p):
+            lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
+        lnprs = tuple(lnpr_list)
         lnpr = LnPrior(lnprs)
         lnpost = LnPost(x, y, sy=sy, x_limits=xl, y_limits=yl, sy_limits=syl,
                         lnpr=lnpr)
 
         # Using affine-invariant MCMC
         nwalkers = 250
-        ndim = 2
+        ndim = len(lnprs)
         if not args.p0:
             p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
         else:
             p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
-        print(p0, np.shape(p0))
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
         pos, prob, state = sampler.run_mcmc(p0, 250)
         sampler.reset()
