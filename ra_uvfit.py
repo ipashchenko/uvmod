@@ -149,6 +149,7 @@ class LnLike(object):
         if self.sy is not None:
             assert(len(self.y) == len(self.sy))
 
+        # TODO: Some logic for choosing 2d (iso vs. aniso) is needed
         # Choose method for model calculation here
         if self.x.ndim == 1:
             self._model = Model_1d
