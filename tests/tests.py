@@ -3,8 +3,9 @@
 
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
-from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior, LnPost,
-                      hdi_of_mcmc, Model_2d_isotropic, Model_2d_anisotropic)
+from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior,
+                      LnPost, hdi_of_mcmc, Model_2d_isotropic,
+                      Model_2d_anisotropic)
 try:
     from scipy.stats import uniform
     is_scipy = True
@@ -98,8 +99,6 @@ class Test_1D(TestCase):
         lnprs = ((uniform.logpdf, self.p0_range, dict(),),
                  (uniform.logpdf, self.p1_range, dict(),),)
         lnpr = LnPrior(lnprs)
-        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl)
         lnpost = LnPost(self.x, self.y, sy=self.sy, x_limits=self.xl,
                         y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
