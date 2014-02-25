@@ -3,7 +3,7 @@
 
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
-from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior,
+from uvmod.ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior,
                       LnPost, hdi_of_mcmc, Model_2d_isotropic,
                       Model_2d_anisotropic)
 try:
