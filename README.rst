@@ -16,16 +16,16 @@ numpy, scipy (for LMA), emcee (for MCMC), pylab (for plots)
 Using  Levenberg–Marquardt algorithm (LMA) with ``-leastsq`` key:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``user@host:~$ python fit_amp.py detections.dat -leastsq -savefile file -savefig fig.png -p0 -p0 [ p0_0 p0_1 ... ]``   
-            
-- Can't handle limits (nondetections).
-        
-- You should know all requirements and weakness of LMA and LSQ in general.      
+``user@host:~$ python fit_amp.py detections.dat -leastsq -savefile file -savefig fig.png -p0 p0_0 [ p0_1 ... ]``
 
-Fitting detections and upper limits with gaussian model and gaussian noise: 
+- Can't handle limits (nondetections).
+
+- You should know all requirements and weakness of LMA and LSQ in general.
+
+Fitting detections and upper limits with gaussian model and gaussian noise:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``user@host:~$ python fit_amp.py detections.dat ulimits.dat -savefile file -savefig fig.png -max_p max_p0 [ max_p1 ... ] -p0 [ p0_0 p0_1 ... ] -std0 std0_0 [ std0_1 ... ]``
+``user@host:~$ python fit_amp.py detections.dat ulimits.dat -savefile file -savefig fig.png -max_p max_p0 [ max_p1 ... ] -p0 p0_0 [ p0_1 ... ] -std0 std0_0 [ std0_1 ... ]``
 
 Parameters:
 
@@ -38,11 +38,11 @@ Parameters:
 Notes:
 
 - 1D model provides 2 parameters (amplitude and std of gaussian). If uncertainties of detections and/or ulimits are unknown then third parameter is normal noise std.
-    
+
 - If uncertainties of data are known one can introduce aditional variance - *jitter* (not implemented yet).
-    
+
 - One can also model *outliers* in data (that requires additional 3 parameters: amplitude, mean and variance of outliers distribution) (not implemented yet).
-    
+
 - Most of modelling used receipts in `Hogg's et al. paper`_.
 
 .. _Hogg's et al. paper: http://arxiv.org/abs/1008.4686
