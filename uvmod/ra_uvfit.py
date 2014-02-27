@@ -15,28 +15,39 @@ except ImportError:
     is_scipy = False
 
 
+# TODO: pass an instance of Model subclass to ``__init__`` of ``LnProb`` subclass.
+# it doesn't matter what the dim of ``x``. No, it is beter to pass class so
+# each class can be instantiated in different constructors of ``LnProb``
+# with different ``x``.
+# TODO: How to coinside my choice of ``LnProb`` setup (number of parameters)
+# and ``Model.__call__(p)``?
 class LnPost(object):
     """
     Class that represents posterior density.
 
     :param x:
-        uv-radius (for 1D) or coordinates in uv-plane (for 2D models).
+        Vector of explanatory variable.
 
     :param y:
-        Visibility amplitudes.
+        Vector of response variable.
+
+    :param model:
+        Model class. Class with ``__call__`` method that accepts
+        vector of parameters and returns vector of model values
+        for given explanatory variables (defined e.g. in it's
+        constructor).
 
     :param sy (optional):
-        Std of visibility amplitude measurements.
+        Std of estimates of responce variable.
 
     :param x_limits (optional):
-        uv-radius (for 1D) or coordinates in uv-plane (for 2D models)
-        for upper limits.
+        Vector of explanatory variable for limits.
 
     :param y_limits (optional):
-        Visibility amplitudes for upper limits.
+        Vector of the responce variable for limits.
 
     :param sy_limits (optional):
-        Std of upper limits visibility amplitude measurements.
+        Std of estimates of limits for responce variable.
 
     :param lnpr:
         Instance of ``LnPrior`` class. Actually any callable that returns ln of
@@ -48,8 +59,9 @@ class LnPost(object):
     :param args (optional):
         Keyword arguments for prior density callable.
     """
-    def __init__(self, x, y, sy=None, x_limits=None, y_limits=None,
-                 sy_limits=None, lnpr=None, args=None, kwargs=None):
+    def __init__(self, x, y, model, sy=None, x_limits=None, y_limits=None,
+                 sy_limits=None, lnpr=None, args=None, kwargs=None, jitter=False,
+                 outliers=False):
 
         if lnpr is None:
             raise Exception('Provide ``lnpr`` keyword argument')
@@ -61,8 +73,8 @@ class LnPost(object):
             kwargs = dict()
         self.args = args
         self.kwargs = kwargs
-        self._lnlike = LnLike(x, y, sy=sy, x_limits=x_limits, y_limits=y_limits,
-                              sy_limits=sy_limits)
+        self._lnlike = LnLike(x, y, model, sy=sy, x_limits=x_limits, y_limits=y_limits,
+                              sy_limits=sy_limits, jitter=jitter, outliers=outliers)
 
     def lnpr(self, p):
         return self._lnpr(p, *self.args, **self.kwargs)
@@ -84,27 +96,39 @@ class LnLike(object):
         uv-radius (for 1D) or coordinates in uv-plane (for 2D models).
 
     :param y:
-        Visibility amplitudes.
+        Vector of response variable.
+
+    :param model:
+        Model class. Class with ``__call__`` method that accepts
+        vector of parameters and returns vector of model values
+        for given explanatory variables (defined e.g. in it's
+        constructor).
 
     :param sy (optional):
-        Std of visibility amplitude measurements.
+        Std of estimates of responce variable.
 
     :param x_limits (optional):
-        uv-radius (for 1D) or coordinates in uv-plane (for 2D models)
-        for upper limits.
+        Vector of explanatory variable for limits.
 
     :param y_limits (optional):
-        Visibility amplitudes for upper limits.
+        Vector of the responce variable for limits.
 
     :param sy_limits (optional):
-        Std of upper limits visibility amplitude measurements.
+        Std of estimates of limits for responce variable.
 
+    :param jitter (optional):
+        Use jitter if data allows it.
+
+    :param outliers (optional):
+        Model outliers.
     """
-    def __init__(self, x, y, sy=None, x_limits=None, y_limits=None,
-                 sy_limits=None):
+    def __init__(self, x, y, model, sy=None, x_limits=None,
+                 y_limits=None, sy_limits=None, jitter=False,
+                 outliers=False):
         # If x is 2D - (u,v) then use np.at_least_2d?
         self.x = np.asarray(x)
         self.y = np.asarray(y)
+        self._model = model
         if sy is not None:
             self.sy = np.asarray(sy)
         else:
@@ -113,13 +137,16 @@ class LnLike(object):
             self.x_limits = np.asarray(x_limits)
             self.y_limits = np.asarray(y_limits)
         else:
-            self.x_limits = x_limits
-            self.y_limits = y_limits
+            self.x_limits = None
+            self.y_limits = None
         if sy_limits is not None:
             self.sy_limits = np.asarray(sy_limits)
         else:
-            self.sy_limits = sy_limits
+            self.sy_limits = None
+        self.jitter = jitter
+        self.outliers = outliers
 
+        # TODO: Put in subclass
         # Various assertions on data consistency
         assert(self.x.ndim in [1, 2])
         assert(len(self.x) == len(self.y))
@@ -128,13 +155,14 @@ class LnLike(object):
 
         # TODO: Some logic for choosing 2d (iso vs. aniso) is needed
         # Choose method for model calculation here
-        if self.x.ndim == 1:
-            self._model = Model_1d
-        elif self.x.ndim == 2:
-            self._model = Model_2d_isotropic
+        #if self.x.ndim == 1:
+        #    self._model = Model_1d
+        #elif self.x.ndim == 2:
+        #    self._model = Model_2d_isotropic
 
         self._lnprob = list()
-        self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy))
+        self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy,
+                                             jitter=jitter, outliers=outliers))
 
         # If we have any data on upper limits
         if (self.x_limits is not None) or (self.y_limits is not None) or\
@@ -145,7 +173,8 @@ class LnLike(object):
             assert(self.x.ndim == self.x_limits.ndim)
 
             self._lnprob.append(LnProbUlimits(x_limits, y_limits, self._model,
-                                              sy=sy_limits))
+                                              sy=sy_limits, jitter=jitter,
+                                              outliers=outliers))
 
 # TODO: Should i try to use try/except?
     def __call__(self, p):
@@ -187,27 +216,59 @@ class Model_2d_isotropic(Model):
         y = self.x[:, 1]
         return p[0] * np.exp(-(x ** 2. + y ** 2.) ** 2. / (2. * p[1] ** 2.))
 
-
-# TODO: Don't need explanatory variable ``x`` in __init__
+# TODO: ``x``` in constructor to use the same subclass of model for
+# different xs.
 class LnProb(object):
     """
     Basic class that calculates the probability of parameters given
     data (i.e. likelihood).
 
+    :param x:
+        Vector of explanatory variable.
+
+    :param y:
+        Vector of response variable.
+
     :param model:
-        Instance of ``Model`` subclass.
+        Model class. Class with ``__call__`` method that accepts
+        vector of parameters and returns vector of model values
+        for given explanatory variables (defined e.g. in it's
+        constructor).
+
+    :param sy (optional):
+        Std of estimates of responce variable.
+
+    :param jitter (optional):
+        Use jitter if data allows it.
+
+    :param outliers (optional):
+        Model outliers.
     """
-    def __init__(self, x, y, model, sy=None):
+    def __init__(self, x, y, model, sy=None, jitter=False, outliers=False):
         self.x = x
         self.y = y
         self.sy = sy
         self.model = model(x)
+        self.jitter = jitter
+        self.outliers = outliers
 
         # TODO: Put logic to method?
         if self.sy is None:
-            self.lnprob = self._lnprob2
+            if not jitter and not outliers:
+                self.lnprob = self._lnprob3
+            elif not jitter and outliers:
+                self.lnprob = self._lnprob5
+            else:
+                raise Exception("Your data doesn't support this setup.")
         else:
-            self.lnprob = self._lnprob1
+            if not jitter and not outliers:
+                self.lnprob = self._lnprob1
+            elif not jitter and outliers:
+                self.lnprob = self._lnprob6
+            elif jitter and not outliers:
+                self.lnprob = self._lnprob2
+            elif jitter and outliers:
+                self.lnprob = self._lnprob4
 
     def __call__(self, p):
         return self.lnprob(p)
@@ -220,7 +281,31 @@ class LnProb(object):
 
     def _lnprob2(self, p):
         """
+        With estimated uncertainties plus jitter.
+        """
+        raise NotImplementedError()
+
+    def _lnprob3(self, p):
+        """
         Without estimated uncertainties.
+        """
+        raise NotImplementedError()
+
+    def _lnprob4(self, p):
+        """
+        With estimated uncertainties plus jitter plus outliers.
+        """
+        raise NotImplementedError()
+
+    def _lnprob5(self, p):
+        """
+        Without estimated uncertainties plus outliers.
+        """
+        raise NotImplementedError()
+
+    def _lnprob6(self, p):
+        """
+        With estimated uncertainties plus outliers.
         """
         raise NotImplementedError()
 
@@ -229,24 +314,35 @@ class LnProbDetections(LnProb):
     """
     Likelihood for detections.
     """
-    def __init__(self, x, y, model, sy=None):
-        super(LnProbDetections, self).__init__(x, y, model, sy=sy)
+    def __init__(self, x, y, model, sy=None, noise=None,
+                 jitter=False, outliers=False):
+        super(LnProbDetections, self).__init__(x, y, model, sy=sy,
+                                               jitter=jitter, outliers=outliers)
+        # TODO: Subclass detections with noise types
+        self.noise = noise
 
     def _lnprob1(self, p):
+        """
+        With estimated uncertainties.
+        """
         return (-0.5 * np.log(2. * math.pi * self.sy ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * self.sy ** 2)).sum()
 
-    def _lnprob2(self, p):
+    def _lnprob3(self, p):
+        """
+        Without estimated uncertainties.
+        """
         return (-0.5 * np.log(2. * math.pi * p[-1] ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * p[-1] ** 2)).sum()
 
-
+# TODO: Can i calculate upper lim. probability for t-distribution?
 class LnProbUlimits(LnProb):
     """
     Lnlikelihood for upper limits.
     """
-    def __init__(self, x, y, model, sy=None):
-        super(LnProbUlimits, self).__init__(x, y, model, sy=sy)
+    def __init__(self, x, y, model, sy=None, jitter=None, outliers=None):
+        super(LnProbUlimits, self).__init__(x, y, model, sy=sy, jitter=jitter,
+                                            outliers=outliers)
         if not is_scipy:
             raise ImportError("Install scipy to use " + str(self.__class__))
 
@@ -254,9 +350,27 @@ class LnProbUlimits(LnProb):
         return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * self.sy))))).sum()
 
-    def _lnprob2(self, p):
+    def _lnprob3(self, p):
         return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * p[-1]))))).sum()
+
+
+# TODO: First, do for gaussian errors.
+class LnProbDetectionsOutliers(LnProb):
+    """
+    Lnlikelihood for detections with outliers.
+    """
+    def __init__(self, x, y, model, sy=None, noise=None):
+        super(LnProbDetections, self).__init__(x, y, model, sy=sy)
+
+    def _lnprob1(self, p):
+        pass
+
+    def _lnprob2(self, p):
+        pass
+
+    def _lnprob3(self, p):
+        pass
 
 
 class LnPrior(object):
@@ -291,7 +405,7 @@ class LnPrior(object):
 class _function_wrapper(object):
     """
     This is a hack to make the likelihood function pickleable when ``args``
-    are also included.
+    and ``kwargs``are also included.
 
     """
     def __init__(self, f, args, kwargs):
@@ -313,9 +427,6 @@ class _function_wrapper(object):
             raise
 
 
-# TODO: add method ``fit`` that call 1d or 2d methods depending on ``x``.
-# TODO: Create Abstraqct Class for LS_estimates and inherit it. Code for fitting
-# in ``fit_1d`` and ``fit_2d`` is almost the same.
 class LS_estimates(object):
     """
     Class that implements estimates of parameters via least squares method.
@@ -330,10 +441,15 @@ class LS_estimates(object):
     :param y:
         Vector of response variable.
 
+    :param model:
+        Model class. Class with ``__call__`` method that accepts
+        vector of parameters and returns vector of model values
+        for given explanatory variables (defined e.g. in it's
+        constructor).
+
     :param sy (optional):
         Vector of uncertainties. If not ``None`` then this vector will be used
         as relative weights in the least-squares problem. (default: ``None``)
-
     """
 
     def _weighted_residuals(cls, p, y, sy, model):
@@ -342,55 +458,16 @@ class LS_estimates(object):
     def _residuals(cls, p, y, model):
         return (y - model(p))
 
-    def __init__(self, x, y, sy=None):
-        self.x = x
-        self.y = y
-        self.sy = sy
-
-    def fit_1d(self, p0=None):
-        """
-        LS for 1D data.
-
-        :param p0:
-            The starting estimate for the minimization.
-
-        :return:
-            Optimized vector of parameters and it's covariance matrix.
-        """
-
-        if not is_scipy:
-            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
-                              + str(self.__class__))
-        if p0 is None:
-            raise Exception("Define starting estimate for minimization!")
-
-        model = Model_1d(self.x)
-
-        if self.sy is None:
-            func, args = self._residuals, (self.y, model,)
+    def __init__(self, x, y, model, sy=None):
+        self.x = np.asarray(x)
+        self.y = np.asarray(y)
+        self.model = model
+        if sy is not None:
+            self.sy = np.asarray(sy)
         else:
-            func, args = self._weighted_residuals, (self.y, self.sy, model)
+            self.sy = None
 
-        fit = leastsq(func, p0, args=args, full_output=True)
-        (p, pcov, infodict, errmsg, ier) = fit
-
-        if ier not in [1, 2, 3, 4]:
-            msg = "Optimal parameters not found: " + errmsg
-            raise RuntimeError(msg)
-
-        if (len(self.y) > len(p0)) and pcov is not None:
-            # Residual variance
-            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
-            pcov *= s_sq
-        else:
-            pcov = np.inf
-
-        if p[1] < 0:
-            p[1] *= -1.
-
-        return p, pcov
-
-    def fit_2d_isotropic(self, p0=None):
+    def fit(self, p0=None):
         """
         LS for 2D data.
 
@@ -407,12 +484,11 @@ class LS_estimates(object):
         if p0 is None:
             raise Exception("Define starting estimate for minimization!")
 
-        model = Model_2d_isotropic(self.x)
-
         if self.sy is None:
-            func, args = self._residuals, (self.y, model,)
+            func, args = self._residuals, (self.y, self.model(self.x),)
         else:
-            func, args = self._weighted_residuals, (self.y, self.sy, model)
+            func, args = self._weighted_residuals, (self.y, self.sy,
+                                                    self.model(self.x),)
 
         fit = leastsq(func, p0, args=args, full_output=True)
         (p, pcov, infodict, errmsg, ier) = fit
@@ -426,53 +502,7 @@ class LS_estimates(object):
             s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
             pcov *= s_sq
         else:
-            pcov = np.inf
-
-        if p[1] < 0:
-            p[1] *= -1.
-
-        return p, pcov
-
-    def fit_2d_anisotropic(self, p0=None):
-        """
-        LS for 2D data.
-
-        :param p0:
-            The starting estimate for the minimization.
-
-        :return:
-            Optimized vector of parameters and it's covariance matrix.
-        """
-
-        if not is_scipy:
-            raise ImportError("Install ``scipy`` to use ``fit_1d`` method of "
-                              + str(self.__class__))
-        if p0 is None:
-            raise Exception("Define starting estimate for minimization!")
-
-        model = Model_2d_anisotropic(self.x)
-
-        if self.sy is None:
-            func, args = self._residuals, (self.y, model,)
-        else:
-            func, args = self._weighted_residuals, (self.y, self.sy, model)
-
-        fit = leastsq(func, p0, args=args, full_output=True)
-        (p, pcov, infodict, errmsg, ier) = fit
-
-        if ier not in [1, 2, 3, 4]:
-            msg = "Optimal parameters not found: " + errmsg
-            raise RuntimeError(msg)
-
-        if (len(self.y) > len(p0)) and pcov is not None:
-            # Residual variance
-            s_sq = (func(p, *args) ** 2.).sum() / (len(self.y) - len(p0))
-            pcov *= s_sq
-        else:
-            pcov = np.inf
-
-        if p[1] < 0:
-            p[1] *= -1.
+            pcov = np.nan
 
         return p, pcov
 
