@@ -13,7 +13,7 @@ setup(
     author_email='in4pashchenko@gmail.com',
     packages=['uvmod'],
     scripts=['bin/fit_amp.py'],
-    url='',
+    url='https://github.com/ipashchenko/uvmod',
     test_suit='tests',
     license='LICENSE',
     description='Simple models',
