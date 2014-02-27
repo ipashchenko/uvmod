@@ -8,7 +8,7 @@ except ImportError:
 
 setup(
     name='uvmod',
-    version='0.1',
+    version='0.2',
     author='Ilya Pashchenko',
     author_email='in4pashchenko@gmail.com',
     packages=['uvmod'],
