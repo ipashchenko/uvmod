@@ -14,7 +14,6 @@ setup(
     packages=['uvmod'],
     scripts=['bin/fit_amp.py'],
     url='https://github.com/ipashchenko/uvmod',
-    test_suit='tests',
     license='LICENSE',
     description='Simple models',
     long_description=open('README.rst').read(),
