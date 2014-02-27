@@ -158,7 +158,7 @@ if __name__ == '__main__':
             print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, p)
             f_handle = file(args.savefile, 'a')
-            if not np.isnan(pcov):
+            if not np.isnan(pcov).any():
                 np.savetxt(f_handle, pcov)
             f_handle.close()
 
