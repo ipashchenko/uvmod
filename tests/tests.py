@@ -11,8 +11,6 @@ try:
     is_scipy = True
 except ImportError:
     is_scipy = False
-import sys
-sys.path.append('/home/ilya/work/emcee')
 try:
     import emcee
     is_emcee = True
