@@ -3,8 +3,9 @@
 
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
-from ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior, LnPost,
-                      hdi_of_mcmc, Model_2d_isotropic, Model_2d_anisotropic)
+from uvmod.ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior,
+                      LnPost, hdi_of_mcmc, Model_2d_isotropic,
+                      Model_2d_anisotropic)
 try:
     from scipy.stats import uniform
     is_scipy = True
@@ -28,8 +29,10 @@ class Test_1D(TestCase):
     def setUp(self):
         self.p = [2, 0.3]
         self.x = np.array([0., 0.1, 0.2, 0.4, 0.6])
-        self.model_1d = Model_1d(self.x)
-        self.y = self.model_1d(self.p) + np.random.normal(0, 0.1, size=5)
+        self.model_1d = Model_1d
+        self.model_1d_detections = Model_1d(self.x)
+        self.y = self.model_1d_detections(self.p) + np.random.normal(0, 0.1,
+                                                                     size=5)
         self.sy = np.random.normal(0.15, 0.025, size=5)
         self.xl = np.array([0.5, 0.7])
         self.yl = np.array([0.6, 0.2])
@@ -43,8 +46,9 @@ class Test_1D(TestCase):
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LnLike(self):
-        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl)
+        lnlike = LnLike(self.x, self.y, self.model_1d, sy=self.sy,
+                        x_limits=self.xl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
         lnlik0 = lnlike._lnprob[0].__call__(self.p)
         lnlik1 = lnlike._lnprob[1].__call__(self.p)
         self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
@@ -55,8 +59,8 @@ class Test_1D(TestCase):
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LS_estimates(self):
-        lsq = LS_estimates(self.x, self.y, sy=self.sy)
-        p, pcov = lsq.fit_1d([1., 1.])
+        lsq = LS_estimates(self.x, self.y, self.model_1d, sy=self.sy)
+        p, pcov = lsq.fit([1., 1.])
         delta0 = 3. * np.sqrt(pcov[0, 0])
         delta1 = 3. * np.sqrt(pcov[1, 1])
         self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
@@ -77,10 +81,12 @@ class Test_1D(TestCase):
         lnprs = ((uniform.logpdf, self.p0_range, dict(),),
                  (uniform.logpdf, self.p1_range, dict(),),)
         lnpr = LnPrior(lnprs)
-        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl)
-        lnpost = LnPost(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        lnlike = LnLike(self.x, self.y, self.model_1d, sy=self.sy,
+                        x_limits=self.xl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
+        lnpost = LnPost(self.x, self.y, self.model_1d, sy=self.sy,
+                        x_limits=self.xl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
         self.assertEqual(lnpost._lnpr(self.p), lnpr(self.p))
         self.assertEqual(lnpost._lnlike(self.p), lnlike(self.p))
         self.assertGreater(lnpost(self.p), lnpost(self.p1))
@@ -98,10 +104,9 @@ class Test_1D(TestCase):
         lnprs = ((uniform.logpdf, self.p0_range, dict(),),
                  (uniform.logpdf, self.p1_range, dict(),),)
         lnpr = LnPrior(lnprs)
-        lnlike = LnLike(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl)
-        lnpost = LnPost(self.x, self.y, sy=self.sy, x_limits=self.xl,
-                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        lnpost = LnPost(self.x, self.y, self.model_1d, sy=self.sy,
+                        x_limits=self.xl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
         pos, prob, state = sampler.run_mcmc(p0, 250)
         sampler.reset()
@@ -125,8 +130,10 @@ class Test_2D_isoptopic(TestCase):
         #self.x[0] = 0.
         #self.y[0] = 0.
         self.xx = np.column_stack((self.x1, self.x2))
-        self.model_2d = Model_2d_isotropic(self.xx)
-        self.y = self.model_2d(self.p) + np.random.normal(0, 0.1, size=10)
+        self.model_2d = Model_2d_isotropic
+        self.model_2d_detections = Model_2d_isotropic(self.xx)
+        self.y = self.model_2d_detections(self.p) + np.random.normal(0, 0.1,
+                                                                     size=10)
         self.sy = np.random.normal(0.15, 0.025, size=10)
         self.x1l = np.hstack((np.random.uniform(low=-1, high=-0.5, size=2),
                              np.random.uniform(low=0.5, high=1, size=2),))
@@ -146,8 +153,9 @@ class Test_2D_isoptopic(TestCase):
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LnLike(self):
-        lnlike = LnLike(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
-                        y_limits=self.yl, sy_limits=self.syl)
+        lnlike = LnLike(self.xx, self.y, self.model_2d, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
         lnlik0 = lnlike._lnprob[0].__call__(self.p)
         lnlik1 = lnlike._lnprob[1].__call__(self.p)
         self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
@@ -158,22 +166,25 @@ class Test_2D_isoptopic(TestCase):
 
     #@skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LS_estimates(self):
-        lsq = LS_estimates(self.xx, self.y, sy=self.sy)
-        p, pcov = lsq.fit_2d_isotropic([1., 1.])
+        lsq = LS_estimates(self.xx, self.y, self.model_2d, sy=self.sy)
+        p, pcov = lsq.fit([1., 1.])
         delta0 = 3. * np.sqrt(pcov[0, 0])
         delta1 = 3. * np.sqrt(pcov[1, 1])
         self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
-        self.assertAlmostEqual(self.p[1], p[1], delta=delta1)
+        # FIXME: use variance as parameter so p[1] > 0
+        self.assertAlmostEqual(self.p[1], abs(p[1]), delta=delta1)
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LnPost(self):
         lnprs = ((uniform.logpdf, self.p0_range, dict(),),
                  (uniform.logpdf, self.p1_range, dict(),),)
         lnpr = LnPrior(lnprs)
-        lnlike = LnLike(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
-                        y_limits=self.yl, sy_limits=self.syl)
-        lnpost = LnPost(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
-                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        lnlike = LnLike(self.xx, self.y, self.model_2d, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
+        lnpost = LnPost(self.xx, self.y, self.model_2d, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
         self.assertEqual(lnpost._lnpr(self.p), lnpr(self.p))
         self.assertEqual(lnpost._lnlike(self.p), lnlike(self.p))
         self.assertGreater(lnpost(self.p), lnpost(self.p1))
@@ -191,8 +202,9 @@ class Test_2D_isoptopic(TestCase):
         lnprs = ((uniform.logpdf, self.p0_range, dict(),),
                  (uniform.logpdf, self.p1_range, dict(),),)
         lnpr = LnPrior(lnprs)
-        lnpost = LnPost(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
-                        y_limits=self.yl, sy_limits=self.syl, lnpr=lnpr)
+        lnpost = LnPost(self.xx, self.y, self.model_2d, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
         pos, prob, state = sampler.run_mcmc(p0, 250)
         sampler.reset()
@@ -217,8 +229,10 @@ class Test_2D_anisoptopic(TestCase):
         #self.x[0] = 0.
         #self.y[0] = 0.
         self.xx = np.column_stack((self.x1, self.x2))
-        self.model_2d = Model_2d_anisotropic(self.xx)
-        self.y = self.model_2d(self.p) + np.random.normal(0, 0.05, size=10)
+        self.model_2d_anisotropic = Model_2d_anisotropic
+        self.model_2d_detections = Model_2d_anisotropic(self.xx)
+        self.y = self.model_2d_detections(self.p) + np.random.normal(0, 0.05,
+                                                                     size=10)
         self.sy = np.random.normal(0.15, 0.025, size=10)
         self.x1l = np.hstack((np.random.uniform(low=-1, high=-0.5, size=2),
                               np.random.uniform(low=0.5, high=1, size=2),))
@@ -244,8 +258,9 @@ class Test_2D_anisoptopic(TestCase):
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LnLike(self):
-        lnlike = LnLike(self.xx, self.y, sy=self.sy, x_limits=self.xxl,
-                        y_limits=self.yl, sy_limits=self.syl)
+        lnlike = LnLike(self.xx, self.y, self.model_2d_anisotropic, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
         lnlik0 = lnlike._lnprob[0].__call__(self.p)
         lnlik1 = lnlike._lnprob[1].__call__(self.p)
         self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
