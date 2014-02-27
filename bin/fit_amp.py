@@ -22,8 +22,6 @@ except ImportError:
     warnings.warn('Install ``scipy`` python package to use least squares'
                   ' estimates.')
     is_scipy = False
-# my own emcee:)
-sys.path.append('/home/ilya/work/emcee')
 try:
     import emcee
     is_emcee = True
