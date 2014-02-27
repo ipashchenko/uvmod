@@ -20,5 +20,6 @@ setup(
     long_description=open('README.rst').read(),
     install_requires=[
         "numpy >= 1.7.2",
-        "scipy == 0.13.3",
+        "scipy >= 0.12.0",
+        "emcee >= 1.2.0"
     ],)
