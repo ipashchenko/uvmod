@@ -11,7 +11,7 @@ setup(
     version='0.2',
     author='Ilya Pashchenko',
     author_email='in4pashchenko@gmail.com',
-    packages=['uvmod'],
+    packages=['uvmod', 'tests'],
     scripts=['bin/fit_amp.py'],
     url='https://github.com/ipashchenko/uvmod',
     license='LICENSE',
