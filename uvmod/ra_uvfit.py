@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+from utils import gauss_1d, gauss_2d_isotropic, gauss_2d_anisotropic
 import numpy as np
 import warnings
 import math
@@ -194,27 +195,27 @@ class Model(object):
 
 class Model_1d(Model):
     def __call__(self, p):
-        return p[0] * np.exp(-self.x ** 2. / (2. * p[1] ** 2.))
-
-
-class Model_2d_anisotropic(Model):
-    def __call__(self, p):
-        """
-        :param p:
-            Parameter vector (amplitude, width, width, rotation angle)
-        """
-        x = self.x[:, 0]
-        y = self.x[:, 1]
-        return p[0] * np.exp(-((x * math.cos(p[3]) - y * math.sin(p[3])) ** 2. /
-            (2. * p[1] ** 2.) + (x * math.sin(p[3]) + y * math.cos(p[3])) ** 2.\
-            / (2. * p[2] ** 2.)))
+        x = self.x
+        return gauss_1d(p, x)
 
 
 class Model_2d_isotropic(Model):
     def __call__(self, p):
         x = self.x[:, 0]
         y = self.x[:, 1]
-        return p[0] * np.exp(-(x ** 2. + y ** 2.) ** 2. / (2. * p[1] ** 2.))
+        return gauss_2d_isotropic(p, x, y)
+
+
+class Model_2d_anisotropic(Model):
+    def __call__(self, p):
+        """
+        :param p:
+            Parameter vector (amplitude, major axis, e, rotation angle)
+        """
+        x = self.x[:, 0]
+        y = self.x[:, 1]
+        return gauss_2d_anisotropic(p, x, y)
+
 
 # TODO: ``x``` in constructor to use the same subclass of model for
 # different xs.
