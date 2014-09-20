@@ -1,6 +1,11 @@
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from utils import gauss_2d_isotropic, gauss_2d_anisotropic
+
+
+gauss_dict = {2: gauss_2d_isotropic, 4: gauss_2d_anisotropic}
 
 
 def scatter_3d(x1, x2, y, xlabel='u', ylabel='v', zlabel='flux', xlim3d=None,
@@ -68,4 +73,113 @@ def scatter_3d_errorbars(x1, x2, y, sy, xlabel='u', ylabel='v', zlabel='flux',
         ax.set_ylim3d(ylim3d[0], ylim3d[1])
     if zlim3d is not None:
         ax.set_zlim3d(zlim3d[0], zlim3d[1])
+    plt.show()
+
+
+def gaussian_2d(p, x1range, x2range, n=100):
+    """
+    Surface plot of 2d gaussian.
+    :param p:
+        Parameters. [amplitude, major axis, [e, rotation angle (from x to y)]].
+    """
+    # making transparent color map
+    theCM = cm.get_cmap()
+    theCM._init()
+    alphas = np.abs(np.linspace(-1.0, 1.0, theCM.N))
+    theCM._lut[:-3,-1] = alphas
+
+    model = gauss_dict[len(p)]
+    x1 = np.linspace(x1range[0], x1range[1], 100)
+    x2 = np.linspace(x2range[0], x2range[1], 100)
+    x1, x2 = np.meshgrid(x1, x2)
+    y = model(p, x1, x2)
+
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    plt.hold(True)
+    #ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(x1, x2, y, rstride=1, cstride=1, cmap=theCM,
+                           linewidth=0, antialiased=False)
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+    plt.show()
+
+
+def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
+             ylabel='v', zlabel='flux', xlim3d=None, ylim3d=None, zlim3d=None,
+             n=30):
+    """
+    Plot model specified by ``p`` and data.
+    :param p:
+    :param x1:
+    :param x2:
+    :param y:
+    :param sy:
+    :param ux1:
+    :param ux2:
+    :param uy:
+    :param xlabel:
+    :param ylabel:
+    :param zlabel:
+    :param xlim3d:
+    :param ylim3d:
+    :param zlim3d:
+    :param n:
+    """
+    # making transparent color map
+    theCM = cm.get_cmap()
+    theCM._init()
+    alphas = np.abs(np.linspace(-1.0, 1.0, theCM.N))
+    theCM._lut[:-3,-1] = alphas
+
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    plt.hold(True)
+
+    # Generating surface plot of model
+    model = gauss_dict[len(p)]
+    x1range = [-max(abs(x1)) - 0.1 * max(abs(x1)), max(abs(x1)) + 0.1 *
+               max(abs(x1))]
+    x2range = [-max(abs(x2)) - 0.1 * max(abs(x2)), max(abs(x2)) + 0.1 *
+               max(abs(x2))]
+    x1_ = np.linspace(x1range[0], x1range[1], n)
+    x2_ = np.linspace(x2range[0], x2range[1], n)
+    x1_, x2_ = np.meshgrid(x1_, x2_)
+    y_ = model(p, x1_, x2_)
+    # Plotting model
+    surf = ax.plot_surface(x1_, x2_, y_, rstride=1, cstride=1, cmap=theCM,
+                           linewidth=0, antialiased=False)
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+
+    # If upper limits
+    if ux1 is not None and ux2 is not None and uy is not None:
+        ax.scatter(ux1, ux2, uy, c='g', marker='v')
+
+    # Plotting data
+    # If no errors
+    if sy is None:
+        ax.scatter(x1, x2, y, c='r', marker='o')
+    # If errors
+    else:
+        x1 = np.asarray(x1)
+        x2 = np.asarray(x2)
+        y = np.asarray(y)
+        sy = np.asarray(sy)
+        # Plot points
+        ax.scatter(x1, x2, y, c='r', marker='o')
+        # Plot errorbars
+        for i in np.arange(0, len(x1)):
+            ax.plot([x1[i], x1[i]], [x2[i], x2[i]], [y[i] + sy[i], y[i] -
+                                                     sy[i]], marker="_",
+                    color='r')
+    # Configure axes
+    if xlim3d is not None:
+        ax.set_xlim3d(xlim3d[0], xlim3d[1])
+    if ylim3d is not None:
+        ax.set_ylim3d(ylim3d[0], ylim3d[1])
+    if zlim3d is not None:
+        ax.set_zlim3d(zlim3d[0], zlim3d[1])
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_zlabel(zlabel)
+
     plt.show()
