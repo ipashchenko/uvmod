@@ -255,18 +255,16 @@ class Test_2D_anisoptopic(TestCase):
         self.p3_range = [0., math.pi]
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
-    def test_LnLike(self):
-        lnlike = LnLike(self.xx, self.y, self.model_2d_anisotropic, sy=self.sy,
-                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
-                        jitter=False, outliers=False)
-        lnlik0 = lnlike._lnprob[0].__call__(self.p)
-        lnlik1 = lnlike._lnprob[1].__call__(self.p)
-        self.assertEqual(lnlike(self.p), lnlik0 + lnlik1)
-        self.assertGreater(lnlike(self.p), lnlike(self.p1))
-        self.assertGreater(lnlike(self.p), lnlike(self.p2))
-        self.assertGreater(lnlike(self.p), lnlike(self.p3))
-        self.assertGreater(lnlike(self.p), lnlike(self.p4))
-        self.assertGreater(lnlike(self.p), lnlike(self.p5))
-        self.assertGreater(lnlike(self.p), lnlike(self.p6))
-        self.assertGreater(lnlike(self.p), lnlike(self.p7))
-        self.assertGreater(lnlike(self.p), lnlike(self.p8))
+    def test_LS_estimates(self):
+        lsq = LS_estimates(self.xx, self.y, self.model_2d_anisotropic,
+                           sy=self.sy)
+        p, pcov = lsq.fit([1., 0.5, 0.5, 1.])
+        delta0 = 3. * np.sqrt(pcov[0, 0])
+        delta1 = 5. * np.sqrt(pcov[1, 1])
+        delta2 = 5. * np.sqrt(pcov[2, 2])
+        delta3 = 5. * np.sqrt(pcov[3, 3])
+        self.assertAlmostEqual(self.p[0], p[0], delta=delta0)
+        # FIXME: use variance as parameter so p[1] > 0
+        self.assertAlmostEqual(self.p[1], abs(p[1]), delta=delta1)
+        self.assertAlmostEqual(self.p[2], p[2], delta=delta2)
+        self.assertAlmostEqual(self.p[3], p[3], delta=delta3)
