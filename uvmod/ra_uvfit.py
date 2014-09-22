@@ -260,19 +260,19 @@ class LnProb(object):
 
     def _lnprob4(self, p):
         """
-        With estimated uncertainties plus jitter plus outliers.
+        Without estimated uncertainties plus outliers.
         """
         raise NotImplementedError()
 
     def _lnprob5(self, p):
         """
-        Without estimated uncertainties plus outliers.
+        With estimated uncertainties plus outliers.
         """
         raise NotImplementedError()
 
     def _lnprob6(self, p):
         """
-        With estimated uncertainties plus outliers.
+        With estimated uncertainties plus jitter plus outliers.
         """
         raise NotImplementedError()
 
@@ -309,6 +309,65 @@ class LnProbDetections(LnProb):
         """
         return (-0.5 * np.log(2. * math.pi * p[-1] ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * p[-1] ** 2)).sum()
+
+    # FIXME: Implement me first!
+    def _lnprob4(self, p):
+        """
+        Without estimated uncertainties plus outliers.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-4] - variance of data,
+            p[-3] - probability that data point comes from outlier distribution,
+            p[-2], p[-1] - mean and variance of outliers distribution.
+        """
+        return (np.logaddexp(-(self.y - self.model(p)) ** 2 / (2. * p[-4]) +\
+        np.log((1. - p[-3]) / np.sqrt(2. * math.pi * p[-4])),\
+        -(self.y - p[-2]) ** 2 / (2. * (p[-4] + p[-1])) + np.log(p[-3] /\
+            np.sqrt(2. * math.pi * (p[-4] + p[-1]))))).sum(axis=0)
+
+    def _lnprob5(self, p):
+        """
+        With estimated uncertainties plus outliers.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-3] - probability that data point comes from outlier distribution,
+            p[-2], p[-1] - mean and variance of outliers distribution.
+        """
+        return (np.logaddexp(-(self.y - self.model(p)) ** 2 /
+                             (2. * self.sy ** 2.) +
+                             np.log((1. - p[-3]) /
+                                    np.sqrt(2. * math.pi * self.sy ** 2.)),
+                             -(self.y - p[-2]) ** 2 /
+                             (2. * (self.sy ** 2. + p[-1])) +
+                             np.log(p[-3] /
+                                    np.sqrt(2. * math.pi *
+                                            (self.sy ** 2. +
+                                             p[-1]))))).sum(axis=0)
+
+    def _lnprob6(self, p):
+        """
+        With estimated uncertainties plus jitter plus outliers.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-4] - variance of jitter,
+            p[-3] - probability that data point comes from outlier distribution,
+            p[-2], p[-1] - mean and variance of outliers distribution.
+        """
+        return (np.logaddexp(-(self.y - self.model(p)) ** 2 /
+                             (2. * (p[-4] + self.sy ** 2.)) +
+                             np.log((1. - p[-3]) /
+                                    np.sqrt(2. * math.pi * (p[-4] +
+                                                            self.sy ** 2.))),
+                             -(self.y - p[-2]) ** 2 /
+                             (2. * (self.sy ** 2. + p[-1] + p[-4])) +
+                             np.log(p[-3] /
+                                    np.sqrt(2. * math.pi *
+                                            (self.sy ** 2. +
+                                             p[-1] + p[-4]))))).sum(axis=0)
+
 
 # TODO: Can i calculate upper lim. probability for t-distribution?
 class LnProbUlimits(LnProb):
