@@ -74,8 +74,9 @@ class LnPost(object):
             kwargs = dict()
         self.args = args
         self.kwargs = kwargs
-        self._lnlike = LnLike(x, y, model, sy=sy, x_limits=x_limits, y_limits=y_limits,
-                              sy_limits=sy_limits, jitter=jitter, outliers=outliers)
+        self._lnlike = LnLike(x, y, model, sy=sy, x_limits=x_limits,
+                              y_limits=y_limits, sy_limits=sy_limits,
+                              jitter=jitter, outliers=outliers)
 
     def lnpr(self, p):
         return self._lnpr(p, *self.args, **self.kwargs)
@@ -180,41 +181,6 @@ class LnLike(object):
 # TODO: Should i try to use try/except?
     def __call__(self, p):
         return sum([lnprob(p) for lnprob in self._lnprob])
-
-
-class Model(object):
-    """
-    Basic class that implements models.
-    """
-    def __init__(self, x):
-        self.x = x
-
-    def __call__(self, p):
-        raise NotImplementedError
-
-
-class Model_1d(Model):
-    def __call__(self, p):
-        x = self.x
-        return gauss_1d(p, x)
-
-
-class Model_2d_isotropic(Model):
-    def __call__(self, p):
-        x = self.x[:, 0]
-        y = self.x[:, 1]
-        return gauss_2d_isotropic(p, x, y)
-
-
-class Model_2d_anisotropic(Model):
-    def __call__(self, p):
-        """
-        :param p:
-            Parameter vector (amplitude, major axis, e, rotation angle)
-        """
-        x = self.x[:, 0]
-        y = self.x[:, 1]
-        return gauss_2d_anisotropic(p, x, y)
 
 
 # TODO: ``x``` in constructor to use the same subclass of model for
@@ -328,6 +294,14 @@ class LnProbDetections(LnProb):
         """
         return (-0.5 * np.log(2. * math.pi * self.sy ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * self.sy ** 2)).sum()
+
+    def _lnprob2(self, p):
+        """
+        With estimated uncertainties plus jitter. Jitter variance is ``p[-1]``.
+        """
+        return (-0.5 * np.log(2. * math.pi * (p[-1] + self.sy ** 2)) -
+                (self.y - self.model(p)) ** 2. / (2. * (p[-1] + self.sy **
+                                                        2))).sum()
 
     def _lnprob3(self, p):
         """
