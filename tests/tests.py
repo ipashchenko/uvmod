@@ -3,9 +3,9 @@
 
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
-from uvmod.ra_uvfit import (Model_1d, LnLike, LS_estimates, LnPrior,
-                      LnPost, hdi_of_mcmc, Model_2d_isotropic,
-                      Model_2d_anisotropic)
+from uvmod.ra_uvfit import LnLike, LS_estimates, LnPrior, LnPost, hdi_of_mcmc
+from uvmod.models import Model_1d, Model_2d_isotropic, Model_2d_anisotropic
+# TODO: Use ``np.random.uniform`` instead
 try:
     from scipy.stats import uniform
     is_scipy = True
@@ -124,9 +124,6 @@ class Test_2D_isoptopic(TestCase):
         self.p = [2, 0.3]
         self.x1 = np.random.uniform(low=-1, high=1, size=10)
         self.x2 = np.random.uniform(low=-1, high=1, size=10)
-        # Flux at zero uv-spacing - but we need general perfomance
-        #self.x[0] = 0.
-        #self.y[0] = 0.
         self.xx = np.column_stack((self.x1, self.x2))
         self.model_2d = Model_2d_isotropic
         self.model_2d_detections = Model_2d_isotropic(self.xx)
@@ -162,7 +159,7 @@ class Test_2D_isoptopic(TestCase):
         self.assertGreater(lnlike(self.p), lnlike(self.p3))
         self.assertGreater(lnlike(self.p), lnlike(self.p4))
 
-    #@skipIf(not is_scipy, "``scipy`` is not installed")
+    @skipIf(not is_scipy, "``scipy`` is not installed")
     def test_LS_estimates(self):
         lsq = LS_estimates(self.xx, self.y, self.model_2d, sy=self.sy)
         p, pcov = lsq.fit([1., 1.])
@@ -217,15 +214,11 @@ class Test_2D_isoptopic(TestCase):
         self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
 
 
-@skip
 class Test_2D_anisoptopic(TestCase):
     def setUp(self):
-        self.p = [2, 0.3, 0.7, 0.]
+        self.p = [2, 0.7, 0.3, 1.]
         self.x1 = np.random.uniform(low=-1, high=1, size=10)
         self.x2 = np.random.uniform(low=-1, high=1, size=10)
-        # Flux at zero uv-spacing - but we need general perfomance
-        #self.x[0] = 0.
-        #self.y[0] = 0.
         self.xx = np.column_stack((self.x1, self.x2))
         self.model_2d_anisotropic = Model_2d_anisotropic
         self.model_2d_detections = Model_2d_anisotropic(self.xx)
@@ -251,7 +244,7 @@ class Test_2D_anisoptopic(TestCase):
         self.p8 = np.asarray(self.p) + np.array([0., 0., 0., -math.pi / 2.])
         self.p0_range = [0., 10.]
         self.p1_range = [0., 2.]
-        self.p2_range = [0., 2.]
+        self.p2_range = [0., 1.]
         self.p3_range = [0., math.pi]
 
     @skipIf(not is_scipy, "``scipy`` is not installed")
@@ -270,3 +263,57 @@ class Test_2D_anisoptopic(TestCase):
         self.assertGreater(lnlike(self.p), lnlike(self.p6))
         self.assertGreater(lnlike(self.p), lnlike(self.p7))
         self.assertGreater(lnlike(self.p), lnlike(self.p8))
+
+    @skipIf(not is_scipy, "``scipy`` is not installed")
+    def test_LnPost(self):
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),
+                 (uniform.logpdf, self.p2_range, dict(),),
+                 (uniform.logpdf, self.p3_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnlike = LnLike(self.xx, self.y, self.model_2d_anisotropic, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        jitter=False, outliers=False)
+        lnpost = LnPost(self.xx, self.y, self.model_2d_anisotropic, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
+        self.assertEqual(lnpost._lnpr(self.p), lnpr(self.p))
+        self.assertEqual(lnpost._lnlike(self.p), lnlike(self.p))
+        self.assertGreater(lnpost(self.p), lnpost(self.p1))
+        self.assertGreater(lnpost(self.p), lnpost(self.p2))
+        self.assertGreater(lnpost(self.p), lnpost(self.p3))
+        self.assertGreater(lnpost(self.p), lnpost(self.p4))
+
+    @skipIf((not is_emcee) or (not is_scipy), "``emcee`` and/or ``scipy``  not"
+                                              " installed")
+    def test_MCMC(self):
+        nwalkers = 250
+        ndim = 4
+        p0 = np.random.uniform(low=self.p1_range[0], high=self.p1_range[1],
+                               size=(nwalkers, ndim))
+        lnprs = ((uniform.logpdf, self.p0_range, dict(),),
+                 (uniform.logpdf, self.p1_range, dict(),),
+                 (uniform.logpdf, self.p2_range, dict(),),
+                 (uniform.logpdf, self.p3_range, dict(),),)
+        lnpr = LnPrior(lnprs)
+        lnpost = LnPost(self.xx, self.y, self.model_2d_anisotropic, sy=self.sy,
+                        x_limits=self.xxl, y_limits=self.yl, sy_limits=self.syl,
+                        lnpr=lnpr, jitter=False, outliers=False)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+        pos, prob, state = sampler.run_mcmc(p0, 250)
+        sampler.reset()
+        sampler.run_mcmc(pos, 500)
+
+        sample_vec0 = sampler.flatchain[::10, 0]
+        sample_vec1 = sampler.flatchain[::10, 1]
+        sample_vec2 = sampler.flatchain[::10, 2]
+        sample_vec3 = sampler.flatchain[::10, 3]
+        p0_hdi_min, p0_hdi_max = hdi_of_mcmc(sample_vec0)
+        p1_hdi_min, p1_hdi_max = hdi_of_mcmc(sample_vec1)
+        p2_hdi_min, p2_hdi_max = hdi_of_mcmc(sample_vec2)
+        p3_hdi_min, p3_hdi_max = hdi_of_mcmc(sample_vec3)
+
+        self.assertTrue((p0_hdi_min < self.p[0] < p0_hdi_max))
+        self.assertTrue((p1_hdi_min < self.p[1] < p1_hdi_max))
+        self.assertTrue((p2_hdi_min < self.p[2] < p2_hdi_max))
+        self.assertTrue((p3_hdi_min < self.p[3] < p3_hdi_max))
