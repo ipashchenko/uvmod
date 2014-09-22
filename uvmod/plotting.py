@@ -28,7 +28,7 @@ def scatter_3d(x1, x2, y, xlabel='u', ylabel='v', zlabel='flux', xlim3d=None,
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_zlabel(zlabel)
-    #configure axes
+    # Configure axes
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
     if ylim3d is not None:
@@ -60,13 +60,13 @@ def scatter_3d_errorbars(x1, x2, y, sy, xlabel='u', ylabel='v', zlabel='flux',
     sy = np.asarray(sy)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    #plot points
+    # Plot points
     ax.scatter(x1, x2, y, c='r', marker='o')
-    #plot errorbars
+    # Plot errorbars
     for i in np.arange(0, len(x1)):
         ax.plot([x1[i], x1[i]], [x2[i], x2[i]], [y[i] + sy[i], y[i] - sy[i]],
                 marker="_", color='r')
-    #configure axes
+    # Configure axes
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
     if ylim3d is not None:
@@ -82,7 +82,7 @@ def gaussian_2d(p, x1range, x2range, n=100):
     :param p:
         Parameters. [amplitude, major axis, [e, rotation angle (from x to y)]].
     """
-    # making transparent color map
+    # Making transparent color map
     theCM = cm.get_cmap()
     theCM._init()
     alphas = np.abs(np.linspace(-1.0, 1.0, theCM.N))
@@ -97,7 +97,6 @@ def gaussian_2d(p, x1range, x2range, n=100):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     plt.hold(True)
-    #ax = fig.add_subplot(111, projection='3d')
     surf = ax.plot_surface(x1, x2, y, rstride=1, cstride=1, cmap=theCM,
                            linewidth=0, antialiased=False)
     fig.colorbar(surf, shrink=0.5, aspect=5)
@@ -125,7 +124,7 @@ def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
     :param zlim3d:
     :param n:
     """
-    # making transparent color map
+    # Making transparent color map
     theCM = cm.get_cmap()
     theCM._init()
     alphas = np.abs(np.linspace(-1.0, 1.0, theCM.N))
