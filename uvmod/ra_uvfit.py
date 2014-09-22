@@ -291,13 +291,20 @@ class LnProbDetections(LnProb):
     def _lnprob1(self, p):
         """
         With estimated uncertainties.
+
+        :param p:
+            Array-like of the parameters.
         """
         return (-0.5 * np.log(2. * math.pi * self.sy ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * self.sy ** 2)).sum()
 
     def _lnprob2(self, p):
         """
-        With estimated uncertainties plus jitter. Jitter variance is ``p[-1]``.
+        With estimated uncertainties plus jitter.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-1] - variance of jitter.
         """
         return (-0.5 * np.log(2. * math.pi * (p[-1] + self.sy ** 2)) -
                 (self.y - self.model(p)) ** 2. / (2. * (p[-1] + self.sy **
@@ -306,11 +313,14 @@ class LnProbDetections(LnProb):
     def _lnprob3(self, p):
         """
         Without estimated uncertainties.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-1] - variance of data.
         """
-        return (-0.5 * np.log(2. * math.pi * p[-1] ** 2) -
+        return (-0.5 * math.log(2. * math.pi * p[-1] ** 2) -
                (self.y - self.model(p)) ** 2. / (2. * p[-1] ** 2)).sum()
 
-    # FIXME: Implement me first!
     def _lnprob4(self, p):
         """
         Without estimated uncertainties plus outliers.
@@ -321,10 +331,14 @@ class LnProbDetections(LnProb):
             p[-3] - probability that data point comes from outlier distribution,
             p[-2], p[-1] - mean and variance of outliers distribution.
         """
-        return (np.logaddexp(-(self.y - self.model(p)) ** 2 / (2. * p[-4]) +\
-        np.log((1. - p[-3]) / np.sqrt(2. * math.pi * p[-4])),\
-        -(self.y - p[-2]) ** 2 / (2. * (p[-4] + p[-1])) + np.log(p[-3] /\
-            np.sqrt(2. * math.pi * (p[-4] + p[-1]))))).sum(axis=0)
+        return (np.logaddexp(-(self.y - self.model(p)) ** 2 /
+                             (2. * p[-4]) +
+                             math.log((1. - p[-3]) /
+                                      np.sqrt(2. * math.pi * p[-4])),
+                             -(self.y - p[-2]) ** 2 / (2. * (p[-4] + p[-1])) +
+                             math.log(p[-3] /
+                                      math.sqrt(2. * math.pi *
+                                                (p[-4] + p[-1]))))).sum(axis=0)
 
     def _lnprob5(self, p):
         """
@@ -341,10 +355,9 @@ class LnProbDetections(LnProb):
                                     np.sqrt(2. * math.pi * self.sy ** 2.)),
                              -(self.y - p[-2]) ** 2 /
                              (2. * (self.sy ** 2. + p[-1])) +
-                             np.log(p[-3] /
-                                    np.sqrt(2. * math.pi *
-                                            (self.sy ** 2. +
-                                             p[-1]))))).sum(axis=0)
+                             np.log(p[-3] / np.sqrt(2. * math.pi *
+                                                    (self.sy ** 2. +
+                                                     p[-1]))))).sum(axis=0)
 
     def _lnprob6(self, p):
         """
