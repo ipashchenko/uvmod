@@ -38,8 +38,9 @@ def scatter_3d(x1, x2, y, xlabel='u', ylabel='v', zlabel='flux', xlim3d=None,
     plt.show()
 
 
-def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
-                         ylabel='v', zlabel='flux', xlim3d=None, ylim3d=None,
+def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None,
+                         uy=None, xlabel='u, ED', ylabel='v, ED',
+                         zlabel='flux, Jy', xlim3d=None, ylim3d=None,
                          zlim3d=None, savefig=None):
     """
     Do 3d plot with errorbars.
@@ -72,8 +73,7 @@ def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None, 
     except:
         ux2max = None
 
-    x1max = x1max or ux1max
-    x2max = x2max or ux2max
+    xmax = max(x1max, ux1max, x2max, ux2max)
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -94,13 +94,18 @@ def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None, 
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
     else:
-        ax.set_xlim3d(-1.2 * x1max, 1.2 * x1max)
+        ax.set_xlim3d(-1.2 * xmax, 1.2 * xmax)
     if ylim3d is not None:
         ax.set_ylim3d(ylim3d[0], ylim3d[1])
     else:
-        ax.set_ylim3d(-1.2 * x2max, 1.2 * x2max)
+        ax.set_ylim3d(-1.2 * xmax, 1.2 * xmax)
     if zlim3d is not None:
         ax.set_zlim3d(zlim3d[0], zlim3d[1])
+
+    # Label axis
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_zlabel(zlabel)
     plt.show()
 
     if savefig:
