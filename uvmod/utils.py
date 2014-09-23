@@ -2,6 +2,16 @@ import math
 import numpy as np
 
 
+band_cm_dict = {'c': 6., 'l': 18., 'p': 94., 'k': 1.35 }
+
+def ed_to_uv(r, lambda_cm=18.):
+    return r * 12742. * 100000. / lambda_cm
+
+
+def uv_to_ed(u, lambda_cm=18.):
+    return u * lambda_cm / (12742. * 100000)
+
+
 vfloat = np.vectorize(float)
 n_q = 0.637
 SEFD_dict = {'RADIO-AS': {'K': {'L': 46700., 'R': 36800},
