@@ -9,7 +9,7 @@ import numpy as np
 import argparse
 from plotting import scatter_3d_errorbars
 
-# TODO: Plot RR&LL with different colors!
+# TODO: Plot RA baselines with different colors!
 
 dtype_converter_dict = {'integer': 'int', 'smallint': 'int', 'character': '|S',
                         'character varying': '|S', 'real': '<f8',
@@ -64,8 +64,8 @@ def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
     # Now read the table and put to structured array
     cursor.execute('SELECT *\
                     FROM pima_observations WHERE source = %(source)s AND\
-                    (polar=%(ll)s OR polar=%(rr)s) AND band = %(band)s', \
-                   {'source': source, 'band': band, 'll': 'LL', 'rr': 'RR'})
+                    band = %(band)s', \
+                   {'source': source, 'band': band})
     table_data = cursor.fetchall()
     struct_array = np.zeros(len(table_data), dtype=dtype)
     for i, (column_name, data_type, char_length,) in enumerate(result):
@@ -117,6 +117,11 @@ if __name__ == '__main__':
         argparse.ArgumentParser(description="Plot source data from RA-survey",
                                 epilog="Help me to develop it here:"
                                        " https://github.com/ipashchenko/uvmod")
+    parser.add_argument('-pols', action='store', nargs='?', default=None,
+                        metavar='pols', type=str, help='- None, rr, ll, rl,'
+                                                       'lr')
+    parser.add_argument('-ra', action='store_true', dest='ra_only',
+                        default=False, help='Plot only RA baselines?')
     parser.add_argument('-savefig', action='store_true', dest='plot_to_file',
                         default=False, help='plot results?')
     parser.add_argument('-savefile', action='store_true', dest='save_to_file',
@@ -146,13 +151,32 @@ if __name__ == '__main__':
     band = args.band
 
     struct_array = get_source_array_from_dbtable(source, band)
+    print struct_array
     # Put u,v from lambda to E.D
     struct_array['u'] = utils.uv_to_ed(struct_array['u'],
                                        lambda_cm=utils.band_cm_dict[band])
     struct_array['v'] = utils.uv_to_ed(struct_array['v'],
                                        lambda_cm=utils.band_cm_dict[band])
+
+    if args.ra_only:
+        struct_array = struct_array[np.where(np.logical_or(struct_array['st1']
+                                                           == 'RADIO-AS',
+                                                           struct_array['st2']
+                                                           == 'RADIO-AS'))]
+
+
+    if args.pols is not None:
+        # Choosing polarization
+        struct_array = struct_array[np.where(struct_array['polar']==
+                                             args.pols.upper())]
+    else:
+        struct_array = struct_array[np.where(np.logical_or(struct_array['polar']
+                                                           == 'LL',
+                                                           struct_array['polar']
+                                                           == 'RR'))]
     detections = list()
     ulimits = list()
+
     # Find detections & upper limits
     for row in struct_array:
         sigma = s_thr_from_obs_row(row)
