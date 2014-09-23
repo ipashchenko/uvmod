@@ -1,4 +1,3 @@
-
 import os
 import sys
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
@@ -10,6 +9,7 @@ import numpy as np
 import argparse
 from plotting import scatter_3d_errorbars
 
+# TODO: Plot RR&LL with different colors!
 
 dtype_converter_dict = {'integer': 'int', 'smallint': 'int', 'character': '|S',
                         'character varying': '|S', 'real': '<f8',
@@ -146,6 +146,11 @@ if __name__ == '__main__':
     band = args.band
 
     struct_array = get_source_array_from_dbtable(source, band)
+    # Put u,v from lambda to E.D
+    struct_array['u'] = utils.uv_to_ed(struct_array['u'],
+                                       lambda_cm=utils.band_cm_dict[band])
+    struct_array['v'] = utils.uv_to_ed(struct_array['v'],
+                                       lambda_cm=utils.band_cm_dict[band])
     detections = list()
     ulimits = list()
     # Find detections & upper limits
