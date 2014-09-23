@@ -7,7 +7,7 @@ from uvmod import utils
 import math
 import psycopg2
 import numpy as np
-#from uvmod.utils import SEFD_dict
+import argparse
 from plotting import scatter_3d_errorbars
 
 
@@ -48,14 +48,41 @@ def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
 
 if __name__ == '__main__':
 
+    parser = \
+        argparse.ArgumentParser(description="Plot source data from RA-survey",
+                                epilog="Help me to develop it here:"
+                                       " https://github.com/ipashchenko/uvmod")
+
+    parser.add_argument('-all', action='store_true', dest='plot_all_data',
+                        default=False,
+                        help='- plot data from all scans')
+    parser.add_argument('-savefig', action='store_true', dest='plot_to_file',
+                        default=False, help='plot results?')
+    parser.add_argument('-savefile', action='store_true', dest='save_to_file',
+                        default=False, help='save results?')
+    parser.add_argument('-source', action='store', nargs='?',
+                        default=None, metavar='source name',
+                        type=str, help='- source name to query [B1950]')
+    parser.add_argument('-band', action='store', nargs='?',
+                        default=None, metavar='band',
+                        type=str, help='- k, c, l or p')
+
+    args = parser.parse_args()
+
+    if not args.source:
+        raise Exception("Use ``-source`` flag to choose source!")
+    if not args.band:
+        raise Exception("Use ``-band`` flag to choose band!")
+
     host='odin.asc.rssi.ru'
     port='5432'
     db='ra_results'
     user='guest'
     password='WyxRep0Dav'
     table='pima_observations'
-    source = '0716+714'
-    band='l'
+    savefig = None
+    source = args.source
+    band = args.band
 
     connection = psycopg2.connect(database=db, user=user, password=password,
                                   host=host, port=port)
@@ -91,23 +118,33 @@ if __name__ == '__main__':
         try:
             x1, x2, y, sy = zip(detections)
         except ValueError:
-            detections = np.atleast_2d(detections)
-            x1 = detections[:, 0]
-            x2 = detections[:, 1]
-            y = detections[:, 2]
-            sy = detections[:, 3]
+            detections_ = np.atleast_2d(detections)
+            x1 = detections_[:, 0]
+            x2 = detections_[:, 1]
+            y = detections_[:, 2]
+            sy = detections_[:, 3]
     else:
         x1, x2, y, sy = [None] * 4
     if ulimits:
         try:
             ux1, ux2, uy = zip(ulimits)
         except ValueError:
-            ulimits = np.atleast_2d(ulimits)
-            ux1 = ulimits[:, 0]
-            ux2 = ulimits[:, 1]
-            uy = ulimits[:, 2]
+            ulimits_ = np.atleast_2d(ulimits)
+            ux1 = ulimits_[:, 0]
+            ux2 = ulimits_[:, 1]
+            uy = ulimits_[:, 2]
     else:
         ux1, ux2, uy = [None] * 3
 
-    scatter_3d_errorbars(x1=x1, x2=x2, y=y, sy=sy, ux1=ux1, ux2=ux2, uy=uy)
+    if args.save_to_file:
+        if detections:
+            detections = np.atleast_2d(detections)
+            np.savetxt(source + '_' + band + '_detections.txt', detections)
+        if ulimits:
+            ulimits = np.atleast_2d(ulimits)
+            np.savetxt(source + '_' + band + '_ulimits.txt', ulimits)
+    if args.plot_to_file:
+        savefig = source + '_' + band
+    scatter_3d_errorbars(x1=x1, x2=x2, y=y, sy=sy, ux1=ux1, ux2=ux2, uy=uy,
+                         savefig=savefig)
 
