@@ -38,8 +38,9 @@ def scatter_3d(x1, x2, y, xlabel='u', ylabel='v', zlabel='flux', xlim3d=None,
     plt.show()
 
 
-def scatter_3d_errorbars(x1, x2, y, sy, xlabel='u', ylabel='v', zlabel='flux',
-                         xlim3d=None, ylim3d=None, zlim3d=None):
+def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
+                         ylabel='v', zlabel='flux', xlim3d=None, ylim3d=None,
+                         zlim3d=None, savefig=None):
     """
     Do 3d plot with errorbars.
     :param x1:
@@ -54,26 +55,56 @@ def scatter_3d_errorbars(x1, x2, y, sy, xlabel='u', ylabel='v', zlabel='flux',
     :param ylabel:
     :param zlabel:
     """
-    x1 = np.asarray(x1)
-    x2 = np.asarray(x2)
-    y = np.asarray(y)
-    sy = np.asarray(sy)
+    try:
+        x1max = max(abs(x1))
+    except:
+        x1max = None
+    try:
+        x2max = max(abs(x2))
+    except:
+        x2max = None
+    try:
+        ux1max = max(abs(ux1))
+    except:
+        ux1max = None
+    try:
+        ux2max = max(abs(ux2))
+    except:
+        ux2max = None
+
+    x1max = x1max or ux1max
+    x2max = x2max or ux2max
+
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.gca(projection='3d')
+    plt.hold(True)
     # Plot points
-    ax.scatter(x1, x2, y, c='r', marker='o')
+    if x1 is not None and x2 is not None and y is not None:
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(x1, x2, y, c='r', marker='o')
     # Plot errorbars
-    for i in np.arange(0, len(x1)):
-        ax.plot([x1[i], x1[i]], [x2[i], x2[i]], [y[i] + sy[i], y[i] - sy[i]],
-                marker="_", color='r')
+    if sy is not None:
+        for i in np.arange(0, len(x1)):
+            ax.plot([x1[i], x1[i]], [x2[i], x2[i]], [y[i] + sy[i], y[i] - sy[i]],
+                    marker="_", color='r')
+    # Plot upper limits
+    if ux1 is not None and ux2 is not None and uy is not None:
+        ax.scatter(ux1, ux2, uy, c='g', marker='v')
     # Configure axes
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
+    else:
+        ax.set_xlim3d(-1.2 * x1max, 1.2 * x1max)
     if ylim3d is not None:
         ax.set_ylim3d(ylim3d[0], ylim3d[1])
+    else:
+        ax.set_ylim3d(-1.2 * x2max, 1.2 * x2max)
     if zlim3d is not None:
         ax.set_zlim3d(zlim3d[0], zlim3d[1])
     plt.show()
+
+    if savefig:
+        plt.savefig(savefig + '.gif')
 
 
 def gaussian_2d(p, x1range, x2range, n=100):
