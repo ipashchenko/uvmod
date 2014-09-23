@@ -117,10 +117,6 @@ if __name__ == '__main__':
         argparse.ArgumentParser(description="Plot source data from RA-survey",
                                 epilog="Help me to develop it here:"
                                        " https://github.com/ipashchenko/uvmod")
-
-    parser.add_argument('-all', action='store_true', dest='plot_all_data',
-                        default=False,
-                        help='- plot data from all scans')
     parser.add_argument('-savefig', action='store_true', dest='plot_to_file',
                         default=False, help='plot results?')
     parser.add_argument('-savefile', action='store_true', dest='save_to_file',
