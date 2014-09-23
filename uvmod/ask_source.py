@@ -11,18 +11,82 @@ import argparse
 from plotting import scatter_3d_errorbars
 
 
+dtype_converter_dict = {'integer': 'int', 'smallint': 'int', 'character': '|S',
+                        'character varying': '|S', 'real': '<f8',
+                        'timestamp without time zone': np.object}
+
+
+def dtype_converter(data_type, char_length):
+    """
+    Converts psycopg2 data types to python data types.
+    :param data_type:
+        Psycopg2 data type.
+    :param char_length:
+        If not ``None``, then shows char length.
+    :return:
+    """
+    result = dtype_converter_dict[data_type]
+    if char_length:
+        result += str(char_length)
+
+    return result
+
+
+def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
+                                  port='5432', db='ra_results', user='guest',
+                                  password='WyxRep0Dav',
+                                  table_name='pima_observations'):
+    """
+    Function that returns numpy structured array from user-specified db table.
+    :param host:
+    :param port:
+    :param db:
+    :param user:
+    :param password:
+    :param table_name:
+    :return:
+    """
+    connection = psycopg2.connect(host=host, port=port, dbname=db,
+                                  password=password, user=user)
+    cursor = connection.cursor()
+    # First know column names
+    cursor.execute("select column_name, data_type, character_maximum_length from\
+                   information_schema.columns where table_schema = \'public\'\
+                   and table_name=\'" + table_name + "\'")
+    result = cursor.fetchall()
+    dtype = list()
+    #column_names, data_types, char_lengths = zip(*result):
+    for column_name, data_type, char_length in result:
+        dtype.append((column_name, dtype_converter(data_type, char_length)))
+
+    # Convert to numpy data types
+
+    # Now read the table and put to structured array
+    cursor.execute('SELECT *\
+                    FROM pima_observations WHERE source = %(source)s AND\
+                    (polar=%(ll)s OR polar=%(rr)s) AND band = %(band)s', \
+                   {'source': source, 'band': band, 'll': 'LL', 'rr': 'RR'})
+    table_data = cursor.fetchall()
+    struct_array = np.zeros(len(table_data), dtype=dtype)
+    for i, (column_name, data_type, char_length,) in enumerate(result):
+        struct_array[column_name] = zip(*table_data)[i]
+
+    return struct_array
+
+
 def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
     """
     Function that calculates sigma of detection from structured array row.
     :param row:
-        Tuple of one row from query.
+        Row of 2D structured array. Actually, an object with __getitem__ method
+        and corresponding keys.
     :return:
         Sigma for detection using upper and lower bands.
     """
-    rt1 = row[0]
-    rt2 = row[1]
-    polar = row[2]
-    band = row[3].upper()
+    rt1 = row['st1']
+    rt2 = row['st2']
+    polar = row['polar']
+    band = row['band'].upper()
     try:
         SEFD_rt1 = utils.SEFD_dict[rt1][band.upper()][polar[0]]
     except KeyError:
@@ -40,11 +104,12 @@ def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
 
     try:
         result = (1. / n_q) * math.sqrt((SEFD_rt1 * SEFD_rt2) / (n * dnu *
-                                                                 row[4]))
+                                                                 row['solint']))
     except TypeError:
         return None
 
     return result
+
 
 if __name__ == '__main__':
 
@@ -84,29 +149,20 @@ if __name__ == '__main__':
     source = args.source
     band = args.band
 
-    connection = psycopg2.connect(database=db, user=user, password=password,
-                                  host=host, port=port)
-    cursor = connection.cursor()
-    cursor.execute('SELECT st1, st2, polar, band, solint, snr, u, v, status\
-                    FROM pima_observations WHERE source = %(source)s AND\
-                    (polar=%(ll)s OR polar=%(rr)s) AND band = %(band)s',\
-                    {'source': source, 'band': band, 'll': 'LL', 'rr': 'RR'})
-    rows = cursor.fetchall()
-    print len(rows), rows
-
+    struct_array = get_source_array_from_dbtable(source, band)
     detections = list()
     ulimits = list()
     # Find detections & upper limits
-    for row in rows:
+    for row in struct_array:
         sigma = s_thr_from_obs_row(row)
         if not sigma:
             print sigma
             print "No SEFD data for ", row
             continue
-        if row[8] == 'y':
-            detections.append([row[6], row[7], row[5] * sigma, sigma])
+        if row['status'] == 'y':
+            detections.append([row['u'], row['v'], row['snr'] * sigma, sigma])
         else:
-            ulimits.append([row[6], row[7], 3. * sigma])
+            ulimits.append([row['u'], row['v'], 3. * sigma])
 
     print "Detections: "
     print detections
