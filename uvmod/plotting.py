@@ -41,7 +41,8 @@ def scatter_3d(x1, x2, y, xlabel='u', ylabel='v', zlabel='flux', xlim3d=None,
 def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None,
                          uy=None, xlabel='u, ED', ylabel='v, ED',
                          zlabel='flux, Jy', xlim3d=None, ylim3d=None,
-                         zlim3d=None, savefig=None):
+                         zlim3d=None, savefig=None, color_det='r',
+                         color_lim='r'):
     """
     Do 3d plot with errorbars.
     :param x1:
@@ -81,15 +82,15 @@ def scatter_3d_errorbars(x1=None, x2=None, y=None, sy=None, ux1=None, ux2=None,
     # Plot points
     if x1 is not None and x2 is not None and y is not None:
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(x1, x2, y, c='r', marker='o')
+        ax.scatter(x1, x2, y, c=color_det, marker='o')
     # Plot errorbars
     if sy is not None:
         for i in np.arange(0, len(x1)):
             ax.plot([x1[i], x1[i]], [x2[i], x2[i]], [y[i] + sy[i], y[i] - sy[i]],
-                    marker="_", color='r')
+                    marker="_", color=color_det)
     # Plot upper limits
     if ux1 is not None and ux2 is not None and uy is not None:
-        ax.scatter(ux1, ux2, uy, c='g', marker='v')
+        ax.scatter(ux1, ux2, uy, c=color_lim, marker='v')
     # Configure axes
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
