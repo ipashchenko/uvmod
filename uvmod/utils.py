@@ -3,6 +3,8 @@ import numpy as np
 
 
 band_cm_dict = {'c': 6., 'l': 18., 'p': 94., 'k': 1.35 }
+mas_to_rad = 4.8481368 * 1E-09
+
 
 def ed_to_uv(r, lambda_cm=18.):
     return r * 12742. * 100000. / lambda_cm
