@@ -161,6 +161,24 @@ def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
     :param zlim3d:
     :param n:
     """
+    try:
+        x1max = max(abs(x1))
+    except:
+        x1max = None
+    try:
+        x2max = max(abs(x2))
+    except:
+        x2max = None
+    try:
+        ux1max = max(abs(ux1))
+    except:
+        ux1max = None
+    try:
+        ux2max = max(abs(ux2))
+    except:
+        ux2max = None
+
+    xmax = max(x1max, ux1max, x2max, ux2max)
     # Making transparent color map
     theCM = cm.get_cmap()
     theCM._init()
@@ -173,12 +191,8 @@ def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
 
     # Generating surface plot of model
     model = gauss_dict[len(p)]
-    x1range = [-max(abs(x1)) - 0.1 * max(abs(x1)), max(abs(x1)) + 0.1 *
-               max(abs(x1))]
-    x2range = [-max(abs(x2)) - 0.1 * max(abs(x2)), max(abs(x2)) + 0.1 *
-               max(abs(x2))]
-    x1_ = np.linspace(x1range[0], x1range[1], n)
-    x2_ = np.linspace(x2range[0], x2range[1], n)
+    x1_ = np.linspace(-1.2 * xmax, 1.2 * xmax, n)
+    x2_ = np.linspace(-1.2 * xmax, 1.2 * xmax, n)
     x1_, x2_ = np.meshgrid(x1_, x2_)
     y_ = model(p, x1_, x2_)
     # Plotting model
@@ -210,10 +224,15 @@ def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
     # Configure axes
     if xlim3d is not None:
         ax.set_xlim3d(xlim3d[0], xlim3d[1])
+    else:
+        ax.set_xlim3d(-1.2 * xmax, 1.2 * xmax)
     if ylim3d is not None:
         ax.set_ylim3d(ylim3d[0], ylim3d[1])
+    else:
+        ax.set_ylim3d(-1.2 * xmax, 1.2 * xmax)
     if zlim3d is not None:
         ax.set_zlim3d(zlim3d[0], zlim3d[1])
+    # Setting labels
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_zlabel(zlabel)
