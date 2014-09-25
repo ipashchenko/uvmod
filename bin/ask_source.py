@@ -49,11 +49,23 @@ if __name__ == '__main__':
                         default=False,
                         help='- use scipy.optimize.leastsq for analysis of'
                              ' detections')
+    parser.add_argument('-mcmc', action='store_true', dest='use_mcmc',
+                        default=False,
+                        help='- use MCMC for analysis of detections')
     parser.add_argument('-p0', action='store', dest='p0', nargs='+',
                         default=None, type=float, help='- starting estimates'
                                                        ' for the minimization'
                                                        ' or center of initial'
                                                        ' ball for MCMC')
+    parser.add_argument('-std0', action='store', dest='std0', nargs='+',
+                        default=None, type=float, help='- stds of initial ball'
+                                                       ' for MCMC')
+    parser.add_argument('-max_p', action='store', nargs='+', default=None,
+                        type=float, help='- maximum values of uniform prior'
+                                         ' distribution for parameters')
+    parser.add_argument('-baselines', action='store', dest='baselines',
+                        nargs='+', default=None, type=float,
+                        help='- lower and upper range of baselines [ED]')
     parser.add_argument('-plot_model', action='store_true', dest='plot_model',
                         default=False, help='plot fitted model?')
     parser.add_argument('-user', action='store', nargs='?',
@@ -65,32 +77,47 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    # Check DB connection parameters
     if not args.user:
         raise Exception("Use ``-user`` flag to supply a user in odin DB!")
     if not args.password:
         raise Exception("Use ``-password`` flag to supply a password to odin"
                         "DB!")
+    # Check source and band
     if not args.source:
         raise Exception("Use ``-source`` flag to choose source!")
     if not args.band:
         raise Exception("Use ``-band`` flag to choose band!")
 
-    host='odin.asc.rssi.ru'
-    port='5432'
-    db='ra_results'
+    # Check fitting parameters
+    if args.use_leastsq and not args.p0:
+        sys.exit("Use -p0 flag to specify the list of starting values for"
+                 " minimization!")
+    if args.use_leastsq and args.std0:
+        print("Specified flag -std0 won't be used in routine!")
+    if args.use_mcmc and not args.p0:
+        sys.exit("Use -p0 flag to specify the center of ball for initial"
+                 " parameters values")
+    if args.use_mcmc and not args.max_p:
+        sys.exit("Use -max_p flag to specify the list of maximum values of"
+                 " parameters in uniform prior distributions")
+    if args.use_mcmc and not args.std0:
+        sys.exit("Use -std0 flag to specify value of std for initial parametes"
+                 " ball")
+
+    host = 'odin.asc.rssi.ru'
+    port = '5432'
+    db = 'ra_results'
     user = args.user
     password = args.password
-    table='pima_observations'
+    table = 'pima_observations'
+    # Default argument for plotting
     savefig = None
     source = args.source
     band = args.band
 
-    struct_array = utils.get_source_array_from_dbtable(source, band)
-    # Put u,v from lambda to E.D
-    #struct_array['u'] = utils.uv_to_ed(struct_array['u'],
-    #                                   lambda_cm=utils.band_cm_dict[band])
-    #struct_array['v'] = utils.uv_to_ed(struct_array['v'],
-    #                                   lambda_cm=utils.band_cm_dict[band])
+    struct_array = utils.get_source_array_from_dbtable(source, band, user=user,
+                                                       password=password)
 
     if args.ra_only:
         struct_array = struct_array[np.where(np.logical_or(struct_array['st1']
@@ -108,10 +135,11 @@ if __name__ == '__main__':
                                                            == 'LL',
                                                            struct_array['polar']
                                                            == 'RR'))]
+    # Find detections & upper limits
+
     detections = list()
     ulimits = list()
 
-    # Find detections & upper limits
     for row in struct_array:
         sigma = utils.s_thr_from_obs_row(row)
         if not sigma:
