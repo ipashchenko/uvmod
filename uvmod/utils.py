@@ -6,7 +6,7 @@ import numpy as np
 mas_to_rad = 4.8481368 * 1E-09
 n_q = 0.637
 vfloat = np.vectorize(float)
-band_cm_dict = {'c': 6., 'l': 18., 'p': 94., 'k': 1.35 }
+band_cm_dict = {'c': 6., 'l': 18., 'p': 94., 'k': 1.35}
 SEFD_dict = {'RADIO-AS': {'K': {'L': 46700., 'R': 36800},
                           'C': {'L': 11600., 'R': None},
                           'L': {'L': 2760., 'R': 2930.}},
@@ -95,8 +95,8 @@ def dtype_converter(data_type, char_length):
 
 
 def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
-                                  port='5432', db='ra_results', user='guest',
-                                  password='WyxRep0Dav',
+                                  port='5432', db='ra_results', user=None,
+                                  password=None,
                                   table_name='pima_observations'):
     """
     Function that returns numpy structured array from user-specified db table.
