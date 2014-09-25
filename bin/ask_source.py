@@ -5,8 +5,7 @@ import argparse
 import numpy as np
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
-from uvmod import utils, models, stats
-from plotting import scatter_3d_errorbars, plot_all
+from uvmod import utils, models, stats, plotting
 
 
 # TODO: Plot RA baselines with different colors!
@@ -147,8 +146,8 @@ if __name__ == '__main__':
             np.savetxt(source + '_' + band + '_ulimits.txt', ulimits)
     if args.plot_to_file:
         savefig = source + '_' + band
-    scatter_3d_errorbars(x1=x1, x2=x2, y=y, sy=sy, ux1=ux1, ux2=ux2, uy=uy,
-                         savefig=savefig)
+    plotting.scatter_3d_errorbars(x1=x1, x2=x2, y=y, sy=sy, ux1=ux1, ux2=ux2,
+                                  uy=uy, savefig=savefig)
 
     # Now fitting detections and upper limits
     if args.use_leastsq:
@@ -188,4 +187,4 @@ if __name__ == '__main__':
         if args.plot_model:
             p[1] = utils.uv_to_ed(p[1], lambda_cm=utils.band_cm_dict[band])
             print "Plotting model with parameters : ", p
-            plot_all(p, x1, x2, y, sy, n=100)
+            plotting.plot_all(p, x1, x2, y, sy, n=100)
