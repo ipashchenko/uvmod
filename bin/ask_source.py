@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import argparse
+import warnings
 import numpy as np
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
@@ -42,9 +43,20 @@ if __name__ == '__main__':
                                                        ' ball for MCMC')
     parser.add_argument('-plot_model', action='store_true', dest='plot_model',
                         default=False, help='plot fitted model?')
+    parser.add_argument('-user', action='store', nargs='?',
+                        default=None, metavar='user',
+                        type=str, help='- user in odin DB')
+    parser.add_argument('-password', action='store', nargs='?',
+                        default=None, metavar='password',
+                        type=str, help='- password for user to odin DB')
 
     args = parser.parse_args()
 
+    if not args.user:
+        raise Exception("Use ``-user`` flag to supply a user in odin DB!")
+    if not args.password:
+        raise Exception("Use ``-password`` flag to supply a password to odin"
+                        "DB!")
     if not args.source:
         raise Exception("Use ``-source`` flag to choose source!")
     if not args.band:
@@ -53,15 +65,14 @@ if __name__ == '__main__':
     host='odin.asc.rssi.ru'
     port='5432'
     db='ra_results'
-    user='guest'
-    password='WyxRep0Dav'
+    user = args.user
+    password = args.password
     table='pima_observations'
     savefig = None
     source = args.source
     band = args.band
 
     struct_array = utils.get_source_array_from_dbtable(source, band)
-    print struct_array
     # Put u,v from lambda to E.D
     #struct_array['u'] = utils.uv_to_ed(struct_array['u'],
     #                                   lambda_cm=utils.band_cm_dict[band])
@@ -91,21 +102,14 @@ if __name__ == '__main__':
     for row in struct_array:
         sigma = utils.s_thr_from_obs_row(row)
         if not sigma:
-            print sigma
-            print "No SEFD data for ", row
             continue
         if row['status'] == 'y':
             detections.append([row['u'], row['v'], row['snr'] * sigma, sigma])
         else:
             ulimits.append([row['u'], row['v'], 3. * sigma])
 
-    print "Detections: "
-    print detections
-    print "===================================="
-    print "Upper limits: "
-    print ulimits
-
     if detections:
+        print "Got ", len(detections), " detections!"
         try:
             x1, x2, y, sy = zip(detections)
         except ValueError:
@@ -122,6 +126,7 @@ if __name__ == '__main__':
         # We need them as ``None`` to put all data in one plotting function.
         x1, x2, y, sy = [None] * 4
     if ulimits:
+        print "Got ", len(ulimits), "upper limits!"
         try:
             ux1, ux2, uy = zip(ulimits)
         except ValueError:
