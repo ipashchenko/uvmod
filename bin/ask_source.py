@@ -4,13 +4,26 @@ import math
 import argparse
 import warnings
 import numpy as np
+from scipy.stats import uniform
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
 from uvmod import utils, models, stats, plotting
+try:
+    import emcee
+    is_emcee = True
+except ImportError:
+    warnings.warn('Install ``emcee`` python package to use MCMC.')
+    is_emcee = False
+try:
+    import triangle
+    is_triangle = True
+except ImportError:
+    warnings.warn('Install ``triangle.py`` python package to draw beautiful'
+                  ' corner plots of posterior PDF.')
+    is_triangle = False
 
 
 # TODO: Plot RA baselines with different colors!
-# TODO: Use only range of baselines for fitting! Otherwise it is useless...
 if __name__ == '__main__':
 
     parser = \
