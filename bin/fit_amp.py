@@ -4,12 +4,12 @@
 from __future__ import (print_function)
 import os
 import sys
-path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
-sys.path.insert(0, path)
-from uvmod import ra_uvfit
 import warnings
 import argparse
 import numpy as np
+path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
+sys.path.insert(0, path)
+from uvmod import stats
 try:
     from pylab import (errorbar, plot, savefig)
     is_pylab = True
@@ -139,10 +139,10 @@ if __name__ == '__main__':
     print ("x, y, sy, xl, yl, syl")
     print(x, y, sy, xl, yl, syl)
 
-    model_1d = ra_uvfit.Model_1d
+    model_1d = stats.Model_1d
     # If we are told to use LS
     if args.use_leastsq:
-        lsq = ra_uvfit.LS_estimates(x, y, model_1d, sy=sy)
+        lsq = stats.LS_estimates(x, y, model_1d, sy=sy)
         p, pcov = lsq.fit(args.p0)
         print(p, pcov)
 
@@ -169,8 +169,8 @@ if __name__ == '__main__':
         for i, max_p in enumerate(args.max_p):
             lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
         lnprs = tuple(lnpr_list)
-        lnpr = ra_uvfit.LnPrior(lnprs)
-        lnpost = ra_uvfit.LnPost(x, y, model_1d, sy=sy, x_limits=xl,
+        lnpr = stats.LnPrior(lnprs)
+        lnpost = stats.LnPost(x, y, model_1d, sy=sy, x_limits=xl,
                                  y_limits=yl, sy_limits=syl, lnpr=lnpr)
 
         # Using affine-invariant MCMC
@@ -190,7 +190,7 @@ if __name__ == '__main__':
         par_list = list()
         for i in range(ndim):
             sample_vec = sampler.flatchain[::10, i]
-            p_hdi_min, p_hdi_max = ra_uvfit.hdi_of_mcmc(sample_vec)
+            p_hdi_min, p_hdi_max = stats.hdi_of_mcmc(sample_vec)
             p_mean = np.mean(sample_vec)
             par_list.append([p_hdi_min, p_mean, p_hdi_max])
 

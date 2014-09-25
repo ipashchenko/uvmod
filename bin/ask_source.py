@@ -1,117 +1,16 @@
 import os
 import sys
+import math
+import argparse
+import numpy as np
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
-from uvmod import utils, models, ra_uvfit
-import math
-import psycopg2
-import numpy as np
-import argparse
+from uvmod import utils, models, stats
 from plotting import scatter_3d_errorbars, plot_all
+
 
 # TODO: Plot RA baselines with different colors!
 # TODO: Use only range of baselines for fitting! Otherwise it is useless...
-
-dtype_converter_dict = {'integer': 'int', 'smallint': 'int', 'character': '|S',
-                        'character varying': '|S', 'real': '<f8',
-                        'timestamp without time zone': np.object}
-
-
-def dtype_converter(data_type, char_length):
-    """
-    Converts psycopg2 data types to python data types.
-    :param data_type:
-        Psycopg2 data type.
-    :param char_length:
-        If not ``None``, then shows char length.
-    :return:
-    """
-    result = dtype_converter_dict[data_type]
-    if char_length:
-        result += str(char_length)
-
-    return result
-
-
-def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
-                                  port='5432', db='ra_results', user='guest',
-                                  password='WyxRep0Dav',
-                                  table_name='pima_observations'):
-    """
-    Function that returns numpy structured array from user-specified db table.
-    :param host:
-    :param port:
-    :param db:
-    :param user:
-    :param password:
-    :param table_name:
-    :return:
-    """
-    connection = psycopg2.connect(host=host, port=port, dbname=db,
-                                  password=password, user=user)
-    cursor = connection.cursor()
-    # First know column names
-    cursor.execute("select column_name, data_type, character_maximum_length from\
-                   information_schema.columns where table_schema = \'public\'\
-                   and table_name=\'" + table_name + "\'")
-    result = cursor.fetchall()
-    dtype = list()
-    #column_names, data_types, char_lengths = zip(*result):
-    for column_name, data_type, char_length in result:
-        dtype.append((column_name, dtype_converter(data_type, char_length)))
-
-    # Convert to numpy data types
-
-    # Now read the table and put to structured array
-    cursor.execute('SELECT *\
-                    FROM pima_observations WHERE source = %(source)s AND\
-                    band = %(band)s', \
-                   {'source': source, 'band': band})
-    table_data = cursor.fetchall()
-    struct_array = np.zeros(len(table_data), dtype=dtype)
-    for i, (column_name, data_type, char_length,) in enumerate(result):
-        struct_array[column_name] = zip(*table_data)[i]
-
-    return struct_array
-
-
-def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
-    """
-    Function that calculates sigma of detection from structured array row.
-    :param row:
-        Row of 2D structured array. Actually, an object with __getitem__ method
-        and corresponding keys.
-    :return:
-        Sigma for detection using upper and lower bands.
-    """
-    rt1 = row['st1']
-    rt2 = row['st2']
-    polar = row['polar']
-    band = row['band'].upper()
-    try:
-        SEFD_rt1 = utils.SEFD_dict[rt1][band.upper()][polar[0]]
-    except KeyError:
-        #raise Exception("There's no entry for " + rt1 + " in SEFD dictionary!")
-        return None
-    except TypeError:
-        raise Exception("There's no SEFD data for " + rt1 + " !")
-    try:
-        SEFD_rt2 = utils.SEFD_dict[rt2][band.upper()][polar[1]]
-    except KeyError:
-        #raise Exception("There's no entry for " + rt2 + " in SEFD dictionary!")
-        return None
-    except TypeError:
-        raise Exception("There's no SEFD data for " + rt2 + " !")
-
-    try:
-        result = (1. / n_q) * math.sqrt((SEFD_rt1 * SEFD_rt2) / (n * dnu *
-                                                                 row['solint']))
-    except TypeError:
-        return None
-
-    return result
-
-
 if __name__ == '__main__':
 
     parser = \
@@ -162,7 +61,7 @@ if __name__ == '__main__':
     source = args.source
     band = args.band
 
-    struct_array = get_source_array_from_dbtable(source, band)
+    struct_array = utils.get_source_array_from_dbtable(source, band)
     print struct_array
     # Put u,v from lambda to E.D
     #struct_array['u'] = utils.uv_to_ed(struct_array['u'],
@@ -191,7 +90,7 @@ if __name__ == '__main__':
 
     # Find detections & upper limits
     for row in struct_array:
-        sigma = s_thr_from_obs_row(row)
+        sigma = utils.s_thr_from_obs_row(row)
         if not sigma:
             print sigma
             print "No SEFD data for ", row
@@ -270,7 +169,7 @@ if __name__ == '__main__':
         print "xx : ", xx
         print "y : ", y
         print "p0 after conv to uv spatial frequencies : ", p0
-        lsq = ra_uvfit.LS_estimates(xx, y, model_to_use, sy=sy)
+        lsq = stats.LS_estimates(xx, y, model_to_use, sy=sy)
         p, pcov = lsq.fit(p0)
         print p, pcov
         # Put from uv to mas for major axis.
