@@ -3,7 +3,7 @@
 
 from __future__ import print_function
 from unittest import (TestCase, skip, skipIf)
-from uvmod.ra_uvfit import LnLike, LS_estimates, LnPrior, LnPost, hdi_of_mcmc
+from uvmod.stats import LnLike, LS_estimates, LnPrior, LnPost, hdi_of_mcmc
 from uvmod.models import Model_1d, Model_2d_isotropic, Model_2d_anisotropic
 # TODO: Use ``np.random.uniform`` instead
 try:
