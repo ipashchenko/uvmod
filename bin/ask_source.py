@@ -147,55 +147,70 @@ if __name__ == '__main__':
         if row['status'] == 'y':
             detections.append([row['u'], row['v'], row['snr'] * sigma, sigma])
         else:
-            ulimits.append([row['u'], row['v'], 3. * sigma])
+            ulimits.append([row['u'], row['v'], 3. * sigma, sigma])
 
-    if detections:
-        print "Got ", len(detections), " detections!"
-        try:
-            x1, x2, y, sy = zip(detections)
-        except ValueError:
-            detections_ = np.atleast_2d(detections)
-            x1 = utils.uv_to_ed(detections_[:, 0],
-                                lambda_cm=utils.band_cm_dict[band])
-            x2 = utils.uv_to_ed(detections_[:, 1],
-                                lambda_cm=utils.band_cm_dict[band])
-            # Keep in uv not ED!
-            xx = detections_[:, :2]
-            y = detections_[:, 2]
-            sy = detections_[:, 3]
+    detections = np.atleast_2d(detections)
+    ulimits = np.atleast_2d(ulimits)
+
+    # If have baseline ranges then use only data within
+    if args.baselines:
+        low, high = args.baselines
+        print low, high
+        print utils.band_cm_dict[band]
+        low = utils.ed_to_uv(low, lambda_cm=utils.band_cm_dict[band])
+        high = utils.ed_to_uv(high, lambda_cm=utils.band_cm_dict[band])
+        print low, high
     else:
+        low = -np.inf
+        high = +np.inf
+
+
+    print "Got ", detections.size, " detections!"
+    try:
+        xx = detections[:, :2]
+        detections = detections[np.logical_and(np.sqrt(xx[:, 0] ** 2. +
+                                                       xx[:, 1] ** 2.) > low,
+                                               np.sqrt(xx[:, 0] ** 2. +
+                                                       xx[:, 1] ** 2.) < high)]
+        xx = detections[:, :2]
+        y = detections[:, 2]
+        sy = detections[:, 3]
+        # convert to ED for plotting
+        x1, x2 = utils.uv_to_ed(detections[:, :2],
+                                lambda_cm=utils.band_cm_dict[band]).T
+    # If no detections (detections.size = 0)
+    except IndexError:
         # We need them as ``None`` to put all data in one plotting function.
         x1, x2, y, sy = [None] * 4
-    if ulimits:
-        print "Got ", len(ulimits), "upper limits!"
-        try:
-            ux1, ux2, uy = zip(ulimits)
-        except ValueError:
-            ulimits_ = np.atleast_2d(ulimits)
-            ux1 = utils.uv_to_ed(ulimits_[:, 0],
-                                 lambda_cm=utils.band_cm_dict[band])
-            ux2 = utils.uv_to_ed(ulimits_[:, 1],
-                                 lambda_cm=utils.band_cm_dict[band])
-            # Keep in uv not ED!
-            uxx = ulimits_[:, :2]
-            uy = ulimits_[:, 2]
-    else:
+
+    print "Got ", ulimits.size, "upper limits!"
+    try:
+        uxx = ulimits[:, :2]
+        ulimits = ulimits[np.logical_and(np.sqrt(uxx[:, 0] ** 2. +
+                                                 uxx[:, 1] ** 2.) > low,
+                                         np.sqrt(uxx[:, 0] ** 2. +
+                                                 uxx[:, 1] ** 2.) < high)]
+        uxx = ulimits[:, :2]
+        uy = ulimits[:, 2]
+        usy = ulimits[:, 3]
+        # convert to ED for plotting
+        ux1, ux2 = utils.uv_to_ed(ulimits[:, :2],
+                                  lambda_cm=utils.band_cm_dict[band]).T
+    # If no upper limits (ulimits.size = 0)
+    except IndexError:
         # We need them as ``None`` to put all data in one plotting function.
-        ux1, ux2, uy = [None] * 3
+        ux1, ux2, uy, usy = [None] * 4
 
     if args.save_to_file:
-        if detections:
-            detections = np.atleast_2d(detections)
-            np.savetxt(source + '_' + band + '_detections.txt', detections)
-        if ulimits:
-            ulimits = np.atleast_2d(ulimits)
-            np.savetxt(source + '_' + band + '_ulimits.txt', ulimits)
+        np.savetxt(source + '_' + band + '_detections.txt', detections)
+        np.savetxt(source + '_' + band + '_ulimits.txt', ulimits)
     if args.plot_to_file:
         savefig = source + '_' + band
     plotting.scatter_3d_errorbars(x1=x1, x2=x2, y=y, sy=sy, ux1=ux1, ux2=ux2,
                                   uy=uy, savefig=savefig)
 
     # Now fitting detections and upper limits
+    # If we are told to use LSQ
     if args.use_leastsq:
         if not detections:
             raise Exception("Need detections for LSQ!")
