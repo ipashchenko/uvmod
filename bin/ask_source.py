@@ -249,3 +249,68 @@ if __name__ == '__main__':
             p[1] = utils.uv_to_ed(p[1], lambda_cm=utils.band_cm_dict[band])
             print "Plotting model with parameters : ", p
             plotting.plot_all(p, x1, x2, y, sy, n=100)
+
+    # If we are told to use MCMC
+    if args.use_mcmc:
+        # Assert on consistency of number of parameters and priors parameter
+        assert(len(args.p0) == len(args.max_p))
+        assert(len(args.p0) == len(args.std0))
+        lnpr_list = list()
+        for i, max_p in enumerate(args.max_p):
+            lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
+        lnprs = tuple(lnpr_list)
+        lnpr = stats.LnPrior(lnprs)
+        p0 = args.p0
+        if len(p0) == 2:
+            print "Fitting isotropic 2d-gaussian model to data!"
+            model_to_use = models.Model_2d_isotropic
+        elif len(p0) == 4:
+            print "Fitting anisotropic 2d-gaussian model to data!"
+            model_to_use = models.Model_2d_anisotropic
+        else:
+            raise Exception("Work only with single 2d gaussian model (2 or 4"
+                            "pars)!")
+        lnpost = stats.LnPost(xx, y, model_to_use, sy=sy, x_limits=uxx,
+                              y_limits=uy, sy_limits=usy, lnpr=lnpr)
+
+        # Using affine-invariant MCMC
+        nwalkers = 250
+        ndim = len(lnprs)
+        if not args.p0:
+            p0 = np.random.uniform(low=0., high=1., size=(nwalkers, ndim))
+        else:
+            p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
+        print "Running mcmc sampler for burn-in..."
+        pos, prob, state = sampler.run_mcmc(p0, 250)
+        print "Reseting sampler..."
+        sampler.reset()
+        print "Running mcmc sampler for final sampling posterior PDF..."
+        sampler.run_mcmc(pos, 500)
+
+        # TODO: print info
+        # TODO: put this to method(sampler, ndim, perc=95)
+        par_list = list()
+        for i in range(ndim):
+            print "Thining by 10x"
+            sample_vec = sampler.flatchain[::10, i]
+            p_hdi_min, p_hdi_max = stats.hdi_of_mcmc(sample_vec)
+            p_mean = np.mean(sample_vec)
+            par_list.append([p_hdi_min, p_mean, p_hdi_max])
+
+        # Visualize with triangle.py
+        if args.savefig:
+            # If ``triangle.py`` is install use it for corner plot of posterior
+            # PDF
+            if is_triangle:
+                figure = triangle.corner(sampler.flatchain[::10, :])
+                print ("Saving figure to " + args.savefig)
+                figure.savefig(args.savefig)
+            # Plot histogram stuff wo triangle
+            else:
+                raise NotImplementedError("Install triangle.py to plot"
+                                          "posterior PDF!")
+
+        if args.savefile:
+            print ("Saving data to " + args.savefile)
+            np.savetxt(args.savefile, np.asarray(par_list))
