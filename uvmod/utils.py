@@ -152,17 +152,23 @@ def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
     try:
         SEFD_rt1 = SEFD_dict[rt1][band.upper()][polar[0]]
     except KeyError:
-        #raise Exception("There's no entry for " + rt1 + " in SEFD dictionary!")
+        print "There's no entry for " + row['st1'] + " for band " +\
+              band.upper() + " in utils.SEFD_dict!"
         return None
     except TypeError:
-        raise Exception("There's no SEFD data for " + rt1 + " !")
+        print "There's no SEFD data for " + row['exper_name'] + " " + \
+              row['st1'] + " for band " + band.upper() + " !"
+        return None
     try:
         SEFD_rt2 = SEFD_dict[rt2][band.upper()][polar[1]]
     except KeyError:
-        #raise Exception("There's no entry for " + rt2 + " in SEFD dictionary!")
+        print "There's no entry for " + row['st2'] + " for band " + \
+              band.upper() + " in utils.SEFD_dict!"
         return None
     except TypeError:
-        raise Exception("There's no SEFD data for " + rt2 + " !")
+        print "There's no SEFD data for " + row['exper_name'] + " " + \
+              row['st2'] + " for band " + band.upper() + " !"
+        return None
 
     try:
         result = (1. / n_q) * math.sqrt((SEFD_rt1 * SEFD_rt2) / (n * dnu *
