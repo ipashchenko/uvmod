@@ -77,7 +77,6 @@ def uv_to_ed(u, lambda_cm=18.):
     return u * lambda_cm / (12742. * 100000)
 
 
-
 def dtype_converter(data_type, char_length):
     """
     Converts psycopg2 data types to python data types.
@@ -111,7 +110,7 @@ def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
     connection = psycopg2.connect(host=host, port=port, dbname=db,
                                   password=password, user=user)
     cursor = connection.cursor()
-    # First know column names
+    # First query column names
     cursor.execute("select column_name, data_type, character_maximum_length from\
                    information_schema.columns where table_schema = \'public\'\
                    and table_name=\'" + table_name + "\'")
@@ -121,9 +120,7 @@ def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
     for column_name, data_type, char_length in result:
         dtype.append((column_name, dtype_converter(data_type, char_length)))
 
-    # Convert to numpy data types
-
-    # Now read the table and put to structured array
+    # Now read the table and put what we need to structured array
     cursor.execute('SELECT *\
                     FROM pima_observations WHERE source = %(source)s AND\
                     band = %(band)s', \
@@ -134,6 +131,86 @@ def get_source_array_from_dbtable(source, band, host='odin.asc.rssi.ru',
         struct_array[column_name] = zip(*table_data)[i]
 
     return struct_array
+
+def double_correlations(struct_array, zero_v=True):
+    """
+    Function that doubles entries for correlations LL, RR by translating (u, v)
+    to (-u, -v). If both RL & LR are available then RL(-u,-v) = (LR(u, v))*
+    :param struct_array:
+        Numpy structured array of source data from DB.
+    :param zero_v: (optional)
+        If stokes V visibility is assumed to be zero?
+    :return:
+        The same as input but added visibility measurements (rows) that are
+        obtained from the existing in conjugate points.
+    """
+    mirror = {'RL': 'LR', 'LR': 'RL'}
+    if zero_v:
+        parallels = struct_array[np.logical_or(struct_array['polar'] == 'RR',
+                                               struct_array['polar'] == 'LL')]
+        print "parallels : ", len(parallels)
+        crosses = struct_array[np.logical_or(struct_array['polar'] == 'RL',
+                                             struct_array['polar'] == 'LR')]
+        print "crosses : ", len(crosses)
+        parallels['u'] *= -1
+        parallels['v'] *= -1
+        for cross in ['RL', 'LR']:
+            crosses[np.where(crosses['polar'] == cross)]['polar'] =\
+                mirror[cross]
+            crosses['u'] *= -1
+            crosses['v'] *= -1
+
+        struct_array = np.append(struct_array, parallels)
+        struct_array = np.append(struct_array, crosses)
+
+    else:
+        crosses = struct_array[np.logical_or(struct_array['polar'] == 'RL',
+                                             struct_array['polar'] == 'LR')]
+        for cross in ['RL', 'LR']:
+            crosses[np.where(crosses['polar'] == cross)]['polar'] = \
+                mirror[cross]
+            crosses['u'] *= -1
+            crosses['v'] *= -1
+        struct_array = np.append(struct_array, crosses)
+
+    return struct_array
+
+
+def find_i(struct_array):
+    """
+    Function that given array of observations returns array with
+    observations of stokes I. Assumes zero stokes V!
+
+    If V!=0 then one can't estimate I from amplitude only data.
+
+    If V=0 then any RR, LL measurement is doubled (by conjugate points of
+    uv-plane). In that case the result depends on does have RR(LL)
+    measurement also measurement of LL(RR). If doesn't then RR(LL) is the
+    estimate of I. If does then estimate of I is mean(RR(LL), LL(RR)) with
+    std = sqrt(var_rr + var_ll)/sqrt(2).
+    :param struct_array:
+    :return:
+    """
+    mirror = {'RR': 'LL', 'LL': 'RR'}
+    for corr in mirror:
+        # Find all parallel hand correlations
+        parallels = struct_array[np.where(struct_array['polar'] == corr)]
+        # For each correlation find if exists mirror correlation at the same
+        # time and stations
+        for obs in parallels:
+            mirror_obs = struct_array[np.where((struct_array['start_time'] ==
+                                                obs['start_time']) &
+                                               (struct_array['stop_time'] ==
+                                                obs['stop_time']) &
+                                               (struct_array['st1'] ==
+                                                obs['st1']) &
+                                               (struct_array['st2'] ==
+                                                obs['st2']) &
+                                               (struct_array['polar'] ==
+                                                obs[mirror[corr]]))]
+            # If there's such mirror parallel hand
+            if mirror_obs.size:
+                pass
 
 
 def s_thr_from_obs_row(row, raise_ra=True, n_q=0.637, dnu=16. * 10 ** 6, n=2):
@@ -222,3 +299,12 @@ def gauss_2d_anisotropic(p, x, y):
     c = math.sin(p[3]) ** 2. / (2. * p[1] ** 2.) + math.cos(p[3]) ** 2. / \
                                                    (2. * (p[1] * p[2]) ** 2.)
     return p[0] * np.exp(-(a * x ** 2. + 2. * b * x * y + c * y ** 2.))
+
+
+if __name__ == '__main__':
+
+    struct_array = get_source_array_from_dbtable('0716+714', 'l', user='guest',
+                                                 password='WyxRep0Dav')
+    print len(struct_array)
+    struct_array = double_correlations(struct_array)
+    print len(struct_array)
