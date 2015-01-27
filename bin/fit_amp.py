@@ -218,8 +218,8 @@ if __name__ == '__main__':
                 errorbar(xl, yl, syl, fmt='.r', lolims=True)
                 model_plot = model(np.arange(1000.) * xmax / 1000.)
                 plot(np.arange(1000.) * xmax / 1000., model_plot(p))
-                print ("Saving figure to " + args.savefig)
-                savefig(args.savefig)
+                print ("Saving figure to " + args.savemodfig)
+                savefig(args.savemodfig)
 
     # If didn't told use LSQ => use MCMC to sample posterior
     else:
