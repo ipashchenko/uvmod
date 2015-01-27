@@ -10,6 +10,7 @@ import numpy as np
 path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
 from uvmod import stats
+from uvmod import models
 try:
     from pylab import (errorbar, plot, savefig)
     is_pylab = True
@@ -40,7 +41,7 @@ except ImportError:
 if __name__ == '__main__':
 
     parser =\
-        argparse.ArgumentParser(description="Fit simple models in uv-plane",
+        argparse.ArgumentParser(description='Fit simple models in uv-plane',
                                 epilog="Help me to develop it here:"
                                        " https://github.com/ipashchenko/uvmod")
 
@@ -53,6 +54,10 @@ if __name__ == '__main__':
                                                        ' for the minimization'
                                                        ' or center of initial'
                                                        ' ball for MCMC')
+    parser.add_argument('-jitter', action='store_true', dest='jitter',
+                        default=False, help='- model jitter?')
+    parser.add_argument('-outliers', action='store_true', dest='outliers',
+                        default=False, help='- model outliers?')
     parser.add_argument('-std0', action='store', dest='std0', nargs='+',
                         default=None, type=float, help='- stds of initial ball'
                                                        ' for MCMC')
@@ -79,28 +84,28 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.use_2d:
-        raise NotImplementedError("Coming soon!")
-
     if args.use_leastsq and (not args.p0):
         sys.exit("Use -p0 flag to specify the list of starting values for"
                  " minimization!")
-
     if args.use_leastsq and args.std0:
         print("Specified flag -std0 won't be used in routine!")
-
+    # FIXME: In fact we can. Use MLE. Put -LnLike to minimization routine!
+    if args.use_leastsq and args.jitter:
+        print("Can't model jitter in LSQ!")
+    # FIXME: In fact we can. Use MLE. Put -LnLike to minimization routine!
+    if args.use_leastsq and args.outliers:
+        print("Can't model outliers in LSQ!")
+    if args.path_to_ulimits and args.outliers:
+        sys.exit("Outliers with upper limints coming soon!")
     if (not args.use_leastsq) and (not args.max_p):
         sys.exit("Use -max_p flag to specify the list of maximum values of"
                  " parameters in uniform prior distributions")
-
     if (not args.use_leastsq) and args.p0 and (not args.std0):
         sys.exit("Use -std0 flag to specify value of std for initial parametes"
                  " ball")
-
     if (not args.use_leastsq) and args.std0 and (not args.p0):
         sys.exit("Use -p0 flag to specify the center of ball for initial"
                  " parameters values")
-
     if (not args.use_leastsq) and (not args.p0) and (not args.std0):
         print("Use -p0 flag to specify the center of ball for initial"
               " parameters values!")
@@ -108,10 +113,14 @@ if __name__ == '__main__':
 
     print(parser.parse_args())
 
+    jitter_n = {True: 1, False: 0}
+    outliers_n = {True: 3, False: 0}
+
     # TODO: Refactor to function func(fname, tuple_of_dim, optional_tuple)
-    # Pre-initialize in case of no uncertainties supplied
-    xl, yl, sy, syl = [None] * 4
     if not args.use_2d:
+        # Pre-initialize in case of no uncertainties supplied
+        xl, yl, sy, syl = [None] * 4
+        model = models.Model_1d
         try:
             x, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
         except ValueError:
@@ -121,7 +130,38 @@ if __name__ == '__main__':
                 xl, yl, syl = np.loadtxt(args.path_to_ulimits, unpack=True)
             except ValueError:
                 xl, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
+
+        print("============ 1D =============")
+        print("Predictors of detections: ")
+        print(x)
+        print("Detection values: ")
+        print(y)
+        print("Detection uncertainties: ")
+        print(sy)
+        print("Predictors of upper limits: ")
+        print(xl)
+        print("Upper limits: ")
+        print(yl)
+        print("Upper limits uncertainties: ")
+        print(syl)
+        print("==============================")
+
     else:
+        # Pre-initialize in case of no uncertainties supplied
+        x1, x2, xl1, xl2, yl, sy, syl = [None] * 7
+        # Choose Model class to use
+        print("We get " + str(len(args.p0)) + " parameters")
+        n_gauss_pars = len(args.p0) - outliers_n[args.outliers] - jitter_n[args.jitter]
+        print("Gauss function has number of parameters :")
+        print(n_gauss_pars)
+        if n_gauss_pars== 2:
+            model = models.Model_2d_isotropic
+            print("Will use isotropic gaussian model")
+        elif n_gauss_pars == 4:
+            model = models.Model_2d_anisotropic
+            print("Will use anisotropic gaussian model")
+        else:
+            raise Exception("Only 2 or 4 parameters for 2D case!")
         try:
             x1, x2, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
         except ValueError:
@@ -135,24 +175,39 @@ if __name__ == '__main__':
                 xl1, xl2, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
             xl = np.column_stack((xl1, xl2,))
 
-    xmax = max(np.hstack((x, xl)))
-    print ("x, y, sy, xl, yl, syl")
-    print(x, y, sy, xl, yl, syl)
+        print("=========== 2D ==============")
+        print("Predictors of detections: ")
+        print(x)
+        print("Detection values: ")
+        print(y)
+        print("Detection uncertainties: ")
+        print(sy)
+        print("Predictors of upper limits: ")
+        print(xl)
+        print("Upper limits: ")
+        print(yl)
+        print("Upper limits uncertainties: ")
+        print(syl)
+        print("============================")
 
-    model_1d = stats.Model_1d
+    xmax = max((np.vstack((x, xl))).flatten())
+
     # If we are told to use LS
     if args.use_leastsq:
-        lsq = stats.LS_estimates(x, y, model_1d, sy=sy)
+        lsq = stats.LS_estimates(x, y, model, sy=sy)
         p, pcov = lsq.fit(args.p0)
         print(p, pcov)
 
         if args.savefig:
-            errorbar(x, y, sy, fmt='.k')
-            errorbar(xl, yl, syl, fmt='.r', lolims=True)
-            model_plot = model_1d(np.arange(1000.) * xmax / 1000.)
-            plot(np.arange(1000.) * xmax / 1000., model_plot(p))
-            print ("Saving figure to " + args.savefig)
-            savefig(args.savefig)
+            if args.use_2d:
+                print("Can't plot 2D for now. Fix me later!")
+            else:
+                errorbar(x, y, sy, fmt='.k')
+                errorbar(xl, yl, syl, fmt='.r', lolims=True)
+                model_plot = model(np.arange(1000.) * xmax / 1000.)
+                plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+                print ("Saving figure to " + args.savefig)
+                savefig(args.savefig)
 
         if args.savefile:
             print ("Saving data to " + args.savefile)
@@ -170,8 +225,9 @@ if __name__ == '__main__':
             lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
         lnprs = tuple(lnpr_list)
         lnpr = stats.LnPrior(lnprs)
-        lnpost = stats.LnPost(x, y, model_1d, sy=sy, x_limits=xl,
-                                 y_limits=yl, sy_limits=syl, lnpr=lnpr)
+        lnpost = stats.LnPost(x, y, model, sy=sy, x_limits=xl, y_limits=yl,
+                              sy_limits=syl, lnpr=lnpr, jitter=args.jitter,
+                              outliers=args.outliers)
 
         # Using affine-invariant MCMC
         nwalkers = 250

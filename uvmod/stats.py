@@ -85,7 +85,10 @@ class LnPost(object):
         return self._lnlike.__call__(p)
 
     def __call__(self, p):
-        return self.lnlike(p) + self.lnpr(p)
+        lnpr = self.lnpr(p)
+        if np.isinf(lnpr):
+            return lnpr
+        return self.lnlike(p) + lnpr
 
 
 # TODO: Add t-distribution noise model
@@ -154,13 +157,6 @@ class LnLike(object):
         assert(len(self.x) == len(self.y))
         if self.sy is not None:
             assert(len(self.y) == len(self.sy))
-
-        # TODO: Some logic for choosing 2d (iso vs. aniso) is needed
-        # Choose method for model calculation here
-        #if self.x.ndim == 1:
-        #    self._model = Model_1d
-        #elif self.x.ndim == 2:
-        #    self._model = Model_2d_isotropic
 
         self._lnprob = list()
         self._lnprob.append(LnProbDetections(x, y, self._model, sy=sy,
@@ -319,7 +315,7 @@ class LnProbDetections(LnProb):
             p[-1] - variance of data.
         """
         return (-0.5 * math.log(2. * math.pi * p[-1] ** 2) -
-               (self.y - self.model(p)) ** 2. / (2. * p[-1] ** 2)).sum()
+               (self.y - self.model(p)) ** 2. / (2. * p[-1])).sum()
 
     def _lnprob4(self, p):
         """
@@ -394,10 +390,34 @@ class LnProbUlimits(LnProb):
             raise ImportError("Install scipy to use " + str(self.__class__))
 
     def _lnprob1(self, p):
+        """
+        With estimated uncertainties.
+
+        :param p:
+            Array-like of the parameters.
+        """
         return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * self.sy))))).sum()
 
+    def _lnprob2(self, p):
+        """
+        With estimated uncertainties plus jitter.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-1] - variance of jitter.
+        """
+        return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
+                (np.sqrt(2. * (self.sy ** 2. + p[-1]))))))).sum()
+
     def _lnprob3(self, p):
+        """
+        Without estimated uncertainties.
+
+        :param p:
+            Array-like of the parameters, where:
+            p[-1] - variance of data.
+        """
         return (np.log(0.5 * (1. + erf((self.y - self.model(p)) /
                 (math.sqrt(2.) * p[-1]))))).sum()
 
