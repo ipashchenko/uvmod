@@ -142,7 +142,7 @@ def gaussian_2d(p, x1range, x2range, n=100):
 
 def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
              ylabel='v', zlabel='flux', xlim3d=None, ylim3d=None, zlim3d=None,
-             n=30):
+             n=30, outfile=None):
     """
     Plot model specified by ``p`` and data.
     :param p:
@@ -238,3 +238,5 @@ def plot_all(p, x1, x2, y, sy=None, ux1=None, ux2=None, uy=None, xlabel='u',
     ax.set_zlabel(zlabel)
 
     plt.show()
+    if outfile:
+        fig.savefig(outfile)
