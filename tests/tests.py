@@ -121,6 +121,7 @@ class Test_1D(TestCase):
 
 class Test_2D_isoptopic(TestCase):
     def setUp(self):
+        np.random.seed(1)
         self.p = [2, 0.3]
         self.x1 = np.random.uniform(low=-1, high=1, size=10)
         self.x2 = np.random.uniform(low=-1, high=1, size=10)
