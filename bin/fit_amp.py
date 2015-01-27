@@ -285,6 +285,7 @@ if __name__ == '__main__':
                 errorbar(x, y, sy, fmt='.k')
                 errorbar(xl, yl, syl, fmt='.r', lolims=True)
                 model_plot = model(np.arange(1000.) * xmax / 1000.)
-                plot(np.arange(1000.) * xmax / 1000., model_plot(p))
-                print ("Saving figure to " + args.savefig)
-                savefig(args.savefig)
+                plot(np.arange(1000.) * xmax / 1000.,
+                     model_plot(par_array[:n_gauss_pars, 1]))
+                print ("Saving figure to " + args.savemodfig)
+                savefig(args.savemodfig)
