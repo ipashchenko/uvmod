@@ -11,6 +11,7 @@ path = os.path.normpath(os.path.join(os.path.dirname(sys.argv[0]), '..'))
 sys.path.insert(0, path)
 from uvmod import stats
 from uvmod import models
+from uvmod import plotting
 try:
     from pylab import (errorbar, plot, savefig)
     is_pylab = True
@@ -75,12 +76,13 @@ if __name__ == '__main__':
                         default=None, metavar='path to file',
                         type=str, help='- file to save plots of posterior'
                                        ' PDF (if ``triangle.py`` is installed)'
-                                       ' or histograms (coming soon). If'
-                                       ' -leastsq flag is set then plot data'
-                                       ' and best model')
+                                       ' or histograms (coming soon)')
+    parser.add_argument('-savemodfig', action='store', nargs='?',
+                        default=None, metavar='path to file', type=str,
+                        help='- file to save plots of model vs data')
     parser.add_argument('-savefile', action='store', nargs='?', default=None,
                         metavar='path to file', type=str, help='- file to save'
-                                                               ' results')
+                                                               ' parameters')
 
     args = parser.parse_args()
 
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     if args.use_leastsq and args.outliers:
         print("Can't model outliers in LSQ!")
     if args.path_to_ulimits and args.outliers:
-        sys.exit("Outliers with upper limints coming soon!")
+        sys.exit("Outliers with upper limits coming soon!")
     if (not args.use_leastsq) and (not args.max_p):
         sys.exit("Use -max_p flag to specify the list of maximum values of"
                  " parameters in uniform prior distributions")
@@ -116,10 +118,11 @@ if __name__ == '__main__':
     jitter_n = {True: 1, False: 0}
     outliers_n = {True: 3, False: 0}
 
+    # Loading data
+    # Pre-initialize in case of no uncertainties supplied
+    sy, xl, yl, syl = [None] * 4
     # TODO: Refactor to function func(fname, tuple_of_dim, optional_tuple)
     if not args.use_2d:
-        # Pre-initialize in case of no uncertainties supplied
-        xl, yl, sy, syl = [None] * 4
         model = models.Model_1d
         try:
             x, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
@@ -131,24 +134,10 @@ if __name__ == '__main__':
             except ValueError:
                 xl, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
 
-        print("============ 1D =============")
-        print("Predictors of detections: ")
-        print(x)
-        print("Detection values: ")
-        print(y)
-        print("Detection uncertainties: ")
-        print(sy)
-        print("Predictors of upper limits: ")
-        print(xl)
-        print("Upper limits: ")
-        print(yl)
-        print("Upper limits uncertainties: ")
-        print(syl)
-        print("==============================")
-
     else:
-        # Pre-initialize in case of no uncertainties supplied
-        x1, x2, xl1, xl2, yl, sy, syl = [None] * 7
+        # Pre-initialize in case of no uncertainties supplied. ``None`` values
+        # will be used later in ploting functions
+        xl1, xl2 = [None] * 2
         # Choose Model class to use
         print("We get " + str(len(args.p0)) + " parameters")
         n_gauss_pars = len(args.p0) - outliers_n[args.outliers] - jitter_n[args.jitter]
@@ -162,6 +151,7 @@ if __name__ == '__main__':
             print("Will use anisotropic gaussian model")
         else:
             raise Exception("Only 2 or 4 parameters for 2D case!")
+
         try:
             x1, x2, y, sy = np.loadtxt(args.path_to_detections, unpack=True)
         except ValueError:
@@ -175,40 +165,41 @@ if __name__ == '__main__':
                 xl1, xl2, yl = np.loadtxt(args.path_to_ulimits, unpack=True)
             xl = np.column_stack((xl1, xl2,))
 
+    # Print data
+    if args.use_2d:
         print("=========== 2D ==============")
-        print("Predictors of detections: ")
-        print(x)
-        print("Detection values: ")
-        print(y)
+    else:
+        print("=========== 1D ==============")
+    print("Predictors of detections: ")
+    print(x)
+    print("Detection values: ")
+    print(y)
+    if sy is not None:
         print("Detection uncertainties: ")
         print(sy)
+    if args.path_to_ulimits is not None:
         print("Predictors of upper limits: ")
         print(xl)
         print("Upper limits: ")
         print(yl)
-        print("Upper limits uncertainties: ")
-        print(syl)
-        print("============================")
+        if syl is not None:
+            print("Upper limits uncertainties: ")
+            print(syl)
+            print("============================")
 
-    xmax = max((np.vstack((x, xl))).flatten())
+    # Find max argument for plotting
+    try:
+        xmax = max((np.vstack((x, xl))).flatten())
+    # If no data on limits
+    except ValueError:
+        xmax = max(x.flatten())
 
-    # If we are told to use LS
+    # If we are told to use LSQ
     if args.use_leastsq:
         lsq = stats.LS_estimates(x, y, model, sy=sy)
         p, pcov = lsq.fit(args.p0)
-        print(p, pcov)
 
-        if args.savefig:
-            if args.use_2d:
-                print("Can't plot 2D for now. Fix me later!")
-            else:
-                errorbar(x, y, sy, fmt='.k')
-                errorbar(xl, yl, syl, fmt='.r', lolims=True)
-                model_plot = model(np.arange(1000.) * xmax / 1000.)
-                plot(np.arange(1000.) * xmax / 1000., model_plot(p))
-                print ("Saving figure to " + args.savefig)
-                savefig(args.savefig)
-
+        # Saving best fit params and covariance matrix
         if args.savefile:
             print ("Saving data to " + args.savefile)
             np.savetxt(args.savefile, p)
@@ -217,9 +208,21 @@ if __name__ == '__main__':
                 np.savetxt(f_handle, pcov)
             f_handle.close()
 
-    # If not => use MCMC
+        # Plotting model vs. data
+        if args.savemodfig:
+            if args.use_2d:
+                plotting.plot_all(p, x1=x1, x2=x2, y=y, sy=sy, ux1=xl1, ux2=xl2,
+                                  uy=yl, outfile=args.savemodfig)
+            else:
+                errorbar(x, y, sy, fmt='.k')
+                errorbar(xl, yl, syl, fmt='.r', lolims=True)
+                model_plot = model(np.arange(1000.) * xmax / 1000.)
+                plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+                print ("Saving figure to " + args.savefig)
+                savefig(args.savefig)
+
+    # If didn't told use LSQ => use MCMC to sample posterior
     else:
-        # TODO: select number of components according to input
         lnpr_list = list()
         for i, max_p in enumerate(args.max_p):
             lnpr_list.append((uniform.logpdf, [0, args.max_p[i]], dict(),))
@@ -237,31 +240,51 @@ if __name__ == '__main__':
         else:
             p0 = emcee.utils.sample_ball(args.p0, args.std0, size=nwalkers)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnpost)
-        pos, prob, state = sampler.run_mcmc(p0, 250)
+        print("Burning-in...")
+        pos, prob, state = sampler.run_mcmc(p0, 150)
         sampler.reset()
-        sampler.run_mcmc(pos, 500)
+        print("Sampling posterior...")
+        sampler.run_mcmc(pos, 200)
 
-        # TODO: print info
-        # TODO: put this to method(sampler, ndim, perc=95)
+        # Calculate mean and 95% HDI interval of parameter's posterior
         par_list = list()
         for i in range(ndim):
             sample_vec = sampler.flatchain[::10, i]
             p_hdi_min, p_hdi_max = stats.hdi_of_mcmc(sample_vec)
             p_mean = np.mean(sample_vec)
             par_list.append([p_hdi_min, p_mean, p_hdi_max])
+            par_array = np.asarray(par_list)
 
-        # Visualize with triangle.py
+        # Save mean and 95% HDI interval of parameter's posterior
+        if args.savefile:
+            print ("Saving data to " + args.savefile)
+            np.savetxt(args.savefile, np.asarray(par_list))
+
+        # Visualize with triangle_plot.py
         if args.savefig:
-            # If ``triangle.py`` is install use it for corner plot of posterior
-            # PDF
+            # If ``triangle_plot.py`` is install use it for corner plot of
+            # parameters posterior
             if is_triangle:
                 figure = triangle.corner(sampler.flatchain[::10, :])
                 print ("Saving figure to " + args.savefig)
                 figure.savefig(args.savefig)
             # Plot histogram stuff wo triangle
             else:
-                raise NotImplementedError("Coming soon!")
+                print("Can't plot posterior without triangle_plot.py!")
 
-        if args.savefile:
-            print ("Saving data to " + args.savefile)
-            np.savetxt(args.savefile, np.asarray(par_list))
+        # Plot model vs. data
+        if args.savemodfig:
+            # 2D case
+            if args.use_2d:
+                print(par_array[:n_gauss_pars], x1, x2, y, sy, xl1, xl2, yl)
+                plotting.plot_all(par_array[:n_gauss_pars, 1], x1=x1, x2=x2, y=y,
+                                  sy=sy, ux1=xl1, ux2=xl2, uy=yl,
+                                  outfile=args.savemodfig)
+            # 1D case
+            else:
+                errorbar(x, y, sy, fmt='.k')
+                errorbar(xl, yl, syl, fmt='.r', lolims=True)
+                model_plot = model(np.arange(1000.) * xmax / 1000.)
+                plot(np.arange(1000.) * xmax / 1000., model_plot(p))
+                print ("Saving figure to " + args.savefig)
+                savefig(args.savefig)
